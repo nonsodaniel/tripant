@@ -6,6 +6,7 @@ import { ArrowLeft, Search } from "lucide-react";
 import { PlaceCard } from "@/components/places/PlaceCard";
 import { CategoryFilter } from "@/components/places/CategoryFilter";
 import { PageSpinner } from "@/components/ui/Spinner";
+import { PlaceCardSkeleton } from "@/components/ui/Skeleton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SearchBar } from "@/components/ui/SearchBar";
 import { useLocationStore } from "@/lib/store/useLocationStore";
@@ -74,7 +75,13 @@ function SearchContent() {
         className="mb-4"
       />
 
-      {loading && <PageSpinner />}
+      {loading && (
+        <div className="grid sm:grid-cols-2 gap-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <PlaceCardSkeleton key={i} />
+          ))}
+        </div>
+      )}
 
       {!loading && places.length === 0 && (q || selectedCategory) && (
         <EmptyState

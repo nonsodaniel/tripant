@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useNearbyPlaces } from "@/lib/hooks/useNearbyPlaces";
 import { PlaceGrid } from "./PlaceGrid";
 import { CategoryFilter } from "./CategoryFilter";
-import { Spinner } from "@/components/ui/Spinner";
+import { PlaceCardSkeleton } from "@/components/ui/Skeleton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import type { Category, Coordinates } from "@/types";
 import { MapPin } from "lucide-react";
@@ -17,7 +17,7 @@ export function NearbySection({ coordinates }: NearbySectionProps) {
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
   const [layout, setLayout] = useState<"grid" | "list">("grid");
 
-  const { places, isLoading, error } = useNearbyPlaces({
+  const { places, isLoading, error, refetch } = useNearbyPlaces({
     lat: coordinates.lat,
     lon: coordinates.lon,
     radius: 2000,
@@ -62,8 +62,10 @@ export function NearbySection({ coordinates }: NearbySectionProps) {
       />
 
       {isLoading && (
-        <div className="flex justify-center py-12">
-          <Spinner size="lg" />
+        <div className={layout === "grid" ? "grid grid-cols-2 sm:grid-cols-3 gap-3" : "space-y-2"}>
+          {Array.from({ length: 6 }).map((_, i) => (
+            <PlaceCardSkeleton key={i} horizontal={layout === "list"} />
+          ))}
         </div>
       )}
 
@@ -72,6 +74,7 @@ export function NearbySection({ coordinates }: NearbySectionProps) {
           icon={<MapPin className="w-6 h-6" />}
           title="Couldn't load places"
           description="Check your connection and try again."
+          action={{ label: "Retry", onClick: () => refetch?.() }}
         />
       )}
 

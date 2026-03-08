@@ -143,3 +143,84 @@ export async function nominatimToPlace(result: SearchResult): Promise<Place> {
     source: "nominatim",
   };
 }
+
+// Map osm_type letter prefix used by Nominatim lookup endpoint
+const OSM_TYPE_LETTER: Record<string, string> = {
+  node: "N",
+  way: "W",
+  relation: "R",
+  n: "N",
+  w: "W",
+  r: "R",
+};
+
+export async function fetchPlaceByNominatimId(nomId: string): Promise<Place | null> {
+  // Expect format: nom-{node|way|relation}-{numeric_id}
+  const match = nomId.match(/^nom-([a-z]+)-(\d+)$/i);
+  if (!match) return null;
+
+  const [, osmType, osmId] = match;
+  const typePrefix = OSM_TYPE_LETTER[osmType.toLowerCase()];
+  if (!typePrefix) return null;
+
+  const params = new URLSearchParams({
+    osm_ids: `${typePrefix}${osmId}`,
+    format: "json",
+    addressdetails: "1",
+    extratags: "1",
+    namedetails: "1",
+  });
+
+  const response = await fetch(`${NOMINATIM_BASE}/lookup?${params}`, {
+    headers: HEADERS,
+    signal: AbortSignal.timeout(10000),
+  });
+
+  if (!response.ok) return null;
+
+  const data: NominatimPlace[] = await response.json();
+  if (!data.length) return null;
+
+  const p = data[0];
+  const addr = p.address || {};
+  const addressStr = [
+    addr.house_number,
+    addr.road,
+    addr.city || addr.town || addr.village,
+    addr.country,
+  ].filter(Boolean).join(", ") || p.display_name;
+
+  const classStr = p.class || "";
+  const typeStr = p.type || "";
+  const category = nominatimClassToCategory(classStr, typeStr);
+
+  return {
+    id: nomId,
+    name: p.name || p.display_name.split(",")[0],
+    category,
+    address: addressStr,
+    coordinates: {
+      lat: parseFloat(p.lat),
+      lon: parseFloat(p.lon),
+    },
+    description: undefined,
+    source: "nominatim",
+  };
+}
+
+function nominatimClassToCategory(cls: string, type: string): Category {
+  if (["restaurant", "cafe", "bar", "pub", "fast_food", "bakery"].includes(type)) return "food";
+  if (type === "museum") return "museum";
+  if (["attraction", "artwork", "viewpoint", "theme_park"].includes(type)) return "attraction";
+  if (["park", "garden", "nature_reserve"].includes(type)) return "park";
+  if (["monument", "memorial", "ruins", "castle"].includes(type) || cls === "historic") return "landmark";
+  if (["nightclub", "casino"].includes(type)) return "nightlife";
+  if (cls === "shop" || ["mall", "marketplace"].includes(type)) return "shopping";
+  if (cls === "public_transport" || ["bus_station", "station"].includes(type)) return "transport";
+  if (["hotel", "motel", "hostel", "guest_house"].includes(type)) return "hotel";
+  if (["events_venue", "theatre", "cinema"].includes(type)) return "event";
+  if (cls === "natural") return "nature";
+  if (["sports_centre", "gym", "stadium"].includes(type)) return "sport";
+  if (["hospital", "clinic", "pharmacy", "doctors"].includes(type)) return "healthcare";
+  return "other";
+}

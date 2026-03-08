@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { PageSpinner } from "@/components/ui/Spinner";
+import { PlaceDetailSkeleton } from "@/components/ui/Skeleton";
 import { useSavedStore } from "@/lib/store/useSavedStore";
 import { useLocationStore } from "@/lib/store/useLocationStore";
 import type { Place } from "@/types";
@@ -72,7 +72,7 @@ export default function PlaceDetailPage({ params }: PageProps) {
     load();
   }, [placeId]);
 
-  if (loading) return <PageSpinner />;
+  if (loading) return <PlaceDetailSkeleton />;
 
   if (error || !place) {
     return (

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { fetchPlaceById } from "@/lib/api/overpass";
+import { fetchPlaceByNominatimId } from "@/lib/api/nominatim";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -10,7 +11,17 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   const placeId = decodeURIComponent(id);
 
   try {
-    const place = await fetchPlaceById(placeId);
+    let place = null;
+
+    if (placeId.startsWith("osm-")) {
+      place = await fetchPlaceById(placeId);
+    } else if (placeId.startsWith("nom-")) {
+      place = await fetchPlaceByNominatimId(placeId);
+    } else {
+      // Try OSM format as fallback
+      place = await fetchPlaceById(placeId);
+    }
+
     if (!place) {
       return NextResponse.json({ error: "Place not found" }, { status: 404 });
     }

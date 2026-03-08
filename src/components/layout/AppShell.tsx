@@ -2,6 +2,7 @@
 
 import { TopBar } from "./TopBar";
 import { BottomNav } from "./BottomNav";
+import { OfflineSplash } from "@/components/ui/OfflineSplash";
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -15,6 +16,7 @@ export function AppShell({ children }: AppShellProps) {
         {children}
       </main>
       <BottomNav />
+      <OfflineSplash />
     </div>
   );
 }
