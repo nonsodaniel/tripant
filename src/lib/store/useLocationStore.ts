@@ -52,6 +52,7 @@ export const useLocationStore = create<LocationState>()(
         city: state.city,
         country: state.country,
       }),
+      skipHydration: true,
     }
   )
 );

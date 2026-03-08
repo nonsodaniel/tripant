@@ -3,9 +3,8 @@
 import { useEffect, useState } from "react";
 import { CalendarDays, Navigation } from "lucide-react";
 import { PlaceCard } from "@/components/places/PlaceCard";
-import { PageSpinner } from "@/components/ui/Spinner";
+import { PlaceCardSkeleton } from "@/components/ui/Skeleton";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { Button } from "@/components/ui/Button";
 import { useGeolocation } from "@/lib/hooks/useGeolocation";
 import type { Place } from "@/types";
 
@@ -24,45 +23,53 @@ export default function EventsPage() {
   }, [coordinates]);
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-6">
-      <div className="mb-6">
-        <h1 className="text-xl font-bold text-text-primary">Local Events</h1>
-        <p className="text-sm text-text-secondary mt-0.5">
-          Discover what&apos;s happening near you
+    <div className="max-w-3xl mx-auto">
+      {/* Header */}
+      <div className="bg-surface border-b border-border px-4 py-5">
+        <h1 className="text-2xl font-bold text-text-primary tracking-tight">Local Events</h1>
+        <p className="text-sm text-text-secondary mt-1">
+          {coordinates
+            ? loading
+              ? "Searching nearby…"
+              : `${events.length} venues & events found`
+            : "Discover what's happening near you"}
         </p>
       </div>
 
-      {!coordinates && (
-        <EmptyState
-          icon={<Navigation className="w-6 h-6" />}
-          title="Location needed"
-          description="Allow location access to discover events near you."
-          action={{ label: "Enable Location", onClick: locate }}
-        />
-      )}
+      <div className="px-4 py-6">
+        {!coordinates && (
+          <EmptyState
+            icon={<Navigation className="w-6 h-6" />}
+            title="Location needed"
+            description="Allow location access to discover events and venues near you."
+            action={{ label: "Enable Location", onClick: locate }}
+          />
+        )}
 
-      {coordinates && loading && <PageSpinner />}
-
-      {coordinates && !loading && events.length === 0 && (
-        <EmptyState
-          icon={<CalendarDays className="w-6 h-6" />}
-          title="No events found"
-          description="No events or venues found in your area. Try expanding your search."
-        />
-      )}
-
-      {!loading && events.length > 0 && (
-        <>
-          <p className="text-sm text-text-secondary mb-4">
-            {events.length} venues &amp; events found
-          </p>
+        {coordinates && loading && (
           <div className="grid sm:grid-cols-2 gap-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <PlaceCardSkeleton key={i} />
+            ))}
+          </div>
+        )}
+
+        {coordinates && !loading && events.length === 0 && (
+          <EmptyState
+            icon={<CalendarDays className="w-6 h-6" />}
+            title="No events found"
+            description="No events or venues found nearby. Try expanding your search area."
+          />
+        )}
+
+        {!loading && events.length > 0 && (
+          <div className="grid sm:grid-cols-2 gap-3 stagger">
             {events.map((event) => (
               <PlaceCard key={event.id} place={event} />
             ))}
           </div>
-        </>
-      )}
+        )}
+      </div>
     </div>
   );
 }

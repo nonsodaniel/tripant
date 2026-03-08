@@ -92,6 +92,41 @@ a, button {
   outline-offset: 2px;
 }
 
+/* ─── Category image backgrounds (light + dark) ─────────────────────── */
+/* Defined here — NOT as Tailwind classes — so they're always in the     */
+/* CSS bundle regardless of Tailwind's content-scanning heuristics.      */
+.cat-bg-food       { background-color: #fffbeb; }
+.cat-bg-attraction { background-color: #eff6ff; }
+.cat-bg-museum     { background-color: #f5f3ff; }
+.cat-bg-park       { background-color: #f0fdf4; }
+.cat-bg-landmark   { background-color: #fff1f2; }
+.cat-bg-nightlife  { background-color: #fdf2f8; }
+.cat-bg-shopping   { background-color: #fff7ed; }
+.cat-bg-transport  { background-color: #f0f9ff; }
+.cat-bg-hotel      { background-color: #f0fdfa; }
+.cat-bg-event      { background-color: #faf5ff; }
+.cat-bg-hidden_gem { background-color: #fefce8; }
+.cat-bg-nature     { background-color: #f7fee7; }
+.cat-bg-sport      { background-color: #eef2ff; }
+.cat-bg-healthcare { background-color: #fff1f2; }
+.cat-bg-other      { background-color: #f3f4f6; }
+
+.dark .cat-bg-food       { background-color: rgba(120,53,15,0.25); }
+.dark .cat-bg-attraction { background-color: rgba(30,58,138,0.25); }
+.dark .cat-bg-museum     { background-color: rgba(76,29,149,0.25); }
+.dark .cat-bg-park       { background-color: rgba(20,83,45,0.25); }
+.dark .cat-bg-landmark   { background-color: rgba(136,19,55,0.25); }
+.dark .cat-bg-nightlife  { background-color: rgba(131,24,67,0.25); }
+.dark .cat-bg-shopping   { background-color: rgba(154,52,18,0.25); }
+.dark .cat-bg-transport  { background-color: rgba(12,74,110,0.25); }
+.dark .cat-bg-hotel      { background-color: rgba(19,78,74,0.25); }
+.dark .cat-bg-event      { background-color: rgba(88,28,135,0.25); }
+.dark .cat-bg-hidden_gem { background-color: rgba(113,63,18,0.25); }
+.dark .cat-bg-nature     { background-color: rgba(54,83,20,0.25); }
+.dark .cat-bg-sport      { background-color: rgba(49,46,129,0.25); }
+.dark .cat-bg-healthcare { background-color: rgba(136,19,55,0.25); }
+.dark .cat-bg-other      { background-color: rgba(31,41,55,0.25); }
+
 /* ─── Animations ─────────────────────────────────────────────────────── */
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(6px); }
@@ -119,14 +154,20 @@ a, button {
 .animate-slide-up     { animation: slideUp 300ms ease-out both; }
 .animate-scale-in     { animation: scaleIn 200ms ease-out both; }
 
-/* Staggered children */
-.stagger > * { animation: fadeIn 250ms ease-out both; }
-.stagger > *:nth-child(1) { animation-delay:  0ms; }
-.stagger > *:nth-child(2) { animation-delay: 40ms; }
-.stagger > *:nth-child(3) { animation-delay: 80ms; }
-.stagger > *:nth-child(4) { animation-delay:120ms; }
-.stagger > *:nth-child(5) { animation-delay:160ms; }
-.stagger > *:nth-child(6) { animation-delay:200ms; }
+/* Staggered children — up to 12 items */
+.stagger > * { animation: fadeIn 220ms ease-out backwards; }
+.stagger > *:nth-child(1)  { animation-delay:  0ms; }
+.stagger > *:nth-child(2)  { animation-delay: 35ms; }
+.stagger > *:nth-child(3)  { animation-delay: 70ms; }
+.stagger > *:nth-child(4)  { animation-delay:105ms; }
+.stagger > *:nth-child(5)  { animation-delay:140ms; }
+.stagger > *:nth-child(6)  { animation-delay:175ms; }
+.stagger > *:nth-child(7)  { animation-delay:210ms; }
+.stagger > *:nth-child(8)  { animation-delay:245ms; }
+.stagger > *:nth-child(9)  { animation-delay:280ms; }
+.stagger > *:nth-child(10) { animation-delay:315ms; }
+.stagger > *:nth-child(11) { animation-delay:350ms; }
+.stagger > *:nth-child(12) { animation-delay:385ms; }
 
 .line-clamp-1 {
   display: -webkit-box;

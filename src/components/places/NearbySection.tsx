@@ -27,7 +27,12 @@ export function NearbySection({ coordinates }: NearbySectionProps) {
   return (
     <section>
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold text-text-primary">Nearby</h2>
+        <div>
+          <h2 className="text-lg font-semibold text-text-primary">Nearby</h2>
+          {!isLoading && places.length > 0 && (
+            <p className="text-xs text-text-tertiary mt-0.5">{places.length} places within 2 km</p>
+          )}
+        </div>
         <div className="flex items-center gap-1">
           <button
             onClick={() => setLayout("grid")}

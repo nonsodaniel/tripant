@@ -162,6 +162,6 @@ export const useTripsStore = create<TripsState>()(
 
       getTrip: (id) => get().trips.find((t) => t.id === id),
     }),
-    { name: "tripant:trips" }
+    { name: "tripant:trips", skipHydration: true }
   )
 );

@@ -126,6 +126,6 @@ export const useSavedStore = create<SavedState>()(
 
       clearHistory: () => set({ history: [], recentSearches: [] }),
     }),
-    { name: "tripant:saved" }
+    { name: "tripant:saved", skipHydration: true }
   )
 );
