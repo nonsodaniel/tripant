@@ -1,7 +1,6 @@
 "use client";
 
 import { use, useEffect, useState } from "react";
-import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -24,11 +23,7 @@ import { useLocationStore } from "@/lib/store/useLocationStore";
 import type { Place } from "@/types";
 import { CATEGORY_LABELS } from "@/types";
 import { formatDistance } from "@/lib/utils/distance";
-
-const MapViewInner = dynamic(
-  () => import("@/components/map/MapViewInner").then((m) => m.MapViewInner),
-  { ssr: false }
-);
+import { MapView } from "@/components/map/MapView";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -206,7 +201,7 @@ export default function PlaceDetailPage({ params }: PageProps) {
           <section>
             <h2 className="text-base font-semibold text-text-primary mb-3">Location</h2>
             <div className="h-48 rounded-2xl overflow-hidden border border-border">
-              <MapViewInner
+              <MapView
                 center={place.coordinates}
                 zoom={16}
                 places={[place]}

@@ -1,10 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-// Leaflet CSS must be a top-level import so webpack bundles it with the
-// initial page CSS. Importing inside a dynamic ssr:false component is
-// unreliable in Next.js App Router (PostCSS can't resolve @import at build time).
-import "leaflet/dist/leaflet.css";
 import { AppShell } from "@/components/layout/AppShell";
 import { ThemeScript } from "@/components/ui/ThemeScript";
 
@@ -49,8 +45,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={inter.variable} suppressHydrationWarning>
       <head>
-        {/* Must run before React hydration to prevent dark-mode flash */}
+        {/* Theme script must run before React hydration to prevent dark-mode flash */}
         <ThemeScript />
+        {/*
+          Leaflet CSS served as a static file from /public/leaflet/leaflet.css.
+          This avoids all webpack/SSR issues — leaflet is browser-only and must
+          never be processed in a server component or PostCSS pipeline.
+        */}
+        <link rel="stylesheet" href="/leaflet/leaflet.css" />
         <link rel="manifest" href="/manifest.json" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import dynamic from "next/dynamic";
+import { MapView } from "@/components/map/MapView";
 import { useGeolocation } from "@/lib/hooks/useGeolocation";
 import { useNearbyPlaces } from "@/lib/hooks/useNearbyPlaces";
 import { CategoryFilter } from "@/components/places/CategoryFilter";
@@ -11,21 +11,6 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import type { Category, Place } from "@/types";
 import { MapPin, Navigation } from "lucide-react";
 import { useLocationStore } from "@/lib/store/useLocationStore";
-
-const MapViewInner = dynamic(
-  () => import("@/components/map/MapViewInner").then((m) => m.MapViewInner),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="w-full h-full bg-surface-secondary flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-6 h-6 border-2 border-border border-t-accent rounded-full animate-spin mx-auto mb-2" />
-          <p className="text-xs text-text-tertiary">Loading map…</p>
-        </div>
-      </div>
-    ),
-  }
-);
 
 export default function MapPage() {
   const { coordinates, locate } = useGeolocation();
@@ -41,21 +26,14 @@ export default function MapPage() {
     enabled: !!coordinates,
   });
 
-  // Fallback center: London
   const DEFAULT_CENTER = { lat: 51.505, lon: -0.09 };
   const center = coordinates ?? DEFAULT_CENTER;
 
   return (
-    /*
-     * Height accounting:
-     *   mobile  → no TopBar (hidden), BottomNav = h-16 (4rem)  → calc(100dvh - 4rem)
-     *   desktop → TopBar = h-14 (3.5rem), no BottomNav          → calc(100dvh - 3.5rem)
-     * Using dvh (dynamic viewport height) prevents issues with mobile browser chrome.
-     */
     <div className="flex h-[calc(100dvh-4rem)] lg:h-[calc(100dvh-3.5rem)]">
-      {/* ── Map panel ───────────────────────────────────────────── */}
+      {/* Map panel */}
       <div className="flex-1 relative overflow-hidden">
-        <MapViewInner
+        <MapView
           center={center}
           places={places}
           userCoords={coordinates || undefined}
@@ -67,7 +45,7 @@ export default function MapPage() {
 
         {/* Category filter overlay */}
         <div className="absolute top-3 left-3 right-3 z-[400]">
-          <div className="bg-surface/90 rounded-xl p-2 border border-border shadow-card backdrop-blur-none">
+          <div className="bg-surface/90 rounded-xl p-2 border border-border shadow-card">
             <CategoryFilter selected={selectedCategory} onChange={setSelectedCategory} />
           </div>
         </div>
@@ -110,7 +88,7 @@ export default function MapPage() {
         )}
       </div>
 
-      {/* ── Results sidebar — desktop only ──────────────────────── */}
+      {/* Results sidebar — desktop only */}
       <div className="hidden lg:flex flex-col w-80 xl:w-96 border-l border-border bg-surface overflow-hidden">
         <div className="p-4 border-b border-border flex-shrink-0">
           <h2 className="font-semibold text-text-primary">
@@ -118,11 +96,8 @@ export default function MapPage() {
           </h2>
           <p className="text-xs text-text-secondary mt-0.5">{places.length} places found</p>
         </div>
-
         <div className="flex-1 overflow-y-auto">
-          {!coordinates && isLoading && (
-            <div className="flex justify-center py-12"><Spinner /></div>
-          )}
+          {!coordinates && isLoading && <div className="flex justify-center py-12"><Spinner /></div>}
           {!coordinates && !isLoading && (
             <EmptyState
               icon={<Navigation className="w-6 h-6" />}
@@ -131,9 +106,7 @@ export default function MapPage() {
               action={{ label: "Enable Location", onClick: locate }}
             />
           )}
-          {coordinates && isLoading && (
-            <div className="flex justify-center py-12"><Spinner /></div>
-          )}
+          {coordinates && isLoading && <div className="flex justify-center py-12"><Spinner /></div>}
           {coordinates && !isLoading && places.length === 0 && (
             <EmptyState
               icon={<MapPin className="w-6 h-6" />}
@@ -141,7 +114,6 @@ export default function MapPage() {
               description="Try a different category or wider radius."
             />
           )}
-
           <div className="p-3 space-y-2">
             {places.map((place) => (
               <div

@@ -8,14 +8,14 @@ import type { Place, Coordinates } from "@/types";
 import { formatDistance } from "@/lib/utils/distance";
 import Link from "next/link";
 
-// Fix Leaflet default marker icons broken by webpack
+// Fix Leaflet default marker icons — point to our static copies in public/
 if (typeof window !== "undefined") {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   delete (L.Icon.Default.prototype as any)._getIconUrl;
   L.Icon.Default.mergeOptions({
-    iconRetinaUrl: "/leaflet/marker-icon-2x.png",
-    iconUrl: "/leaflet/marker-icon.png",
-    shadowUrl: "/leaflet/marker-shadow.png",
+    iconRetinaUrl: "/leaflet/images/marker-icon-2x.png",
+    iconUrl: "/leaflet/images/marker-icon.png",
+    shadowUrl: "/leaflet/images/marker-shadow.png",
   });
 }
 
