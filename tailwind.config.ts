@@ -6,27 +6,29 @@ const config: Config = {
     "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
   ],
+  darkMode: "class",
   theme: {
     extend: {
       colors: {
         accent: {
           DEFAULT: "#2563EB",
-          light: "#EFF6FF",
+          light: "rgb(var(--color-accent-light) / <alpha-value>)",
           dark: "#1D4ED8",
         },
+        // CSS-variable–backed tokens — flips automatically in dark mode
         surface: {
-          DEFAULT: "#FFFFFF",
-          secondary: "#F9FAFB",
-          tertiary: "#F3F4F6",
+          DEFAULT: "rgb(var(--color-surface) / <alpha-value>)",
+          secondary: "rgb(var(--color-surface-secondary) / <alpha-value>)",
+          tertiary: "rgb(var(--color-surface-tertiary) / <alpha-value>)",
         },
         border: {
-          DEFAULT: "#E5E7EB",
-          strong: "#D1D5DB",
+          DEFAULT: "rgb(var(--color-border) / <alpha-value>)",
+          strong: "rgb(var(--color-border-strong) / <alpha-value>)",
         },
         text: {
-          primary: "#111827",
-          secondary: "#6B7280",
-          tertiary: "#9CA3AF",
+          primary: "rgb(var(--color-text-primary) / <alpha-value>)",
+          secondary: "rgb(var(--color-text-secondary) / <alpha-value>)",
+          tertiary: "rgb(var(--color-text-tertiary) / <alpha-value>)",
         },
       },
       fontFamily: {
@@ -36,10 +38,6 @@ const config: Config = {
         card: "0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.06)",
         "card-hover": "0 4px 6px -1px rgb(0 0 0 / 0.08), 0 2px 4px -2px rgb(0 0 0 / 0.08)",
         elevated: "0 10px 15px -3px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.08)",
-      },
-      transitionDuration: {
-        "150": "150ms",
-        "200": "200ms",
       },
       borderRadius: {
         "2xl": "1rem",

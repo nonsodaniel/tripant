@@ -1,64 +1,68 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { MapContainer, TileLayer, Marker, Popup, Circle, useMap, ZoomControl } from "react-leaflet";
 import L from "leaflet";
-import "leaflet/dist/leaflet.css";
+// CSS is imported globally in globals.css — do NOT import it here
 import type { Place, Coordinates } from "@/types";
 import { formatDistance } from "@/lib/utils/distance";
 import Link from "next/link";
 
-// Fix Leaflet default icon
+// Fix Leaflet default marker icons broken by webpack
 if (typeof window !== "undefined") {
-  delete (L.Icon.Default.prototype as unknown as Record<string, unknown>)._getIconUrl;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  delete (L.Icon.Default.prototype as any)._getIconUrl;
   L.Icon.Default.mergeOptions({
-    iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
-    iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
-    shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+    iconRetinaUrl: "/leaflet/marker-icon-2x.png",
+    iconUrl: "/leaflet/marker-icon.png",
+    shadowUrl: "/leaflet/marker-shadow.png",
   });
 }
+
+const CATEGORY_COLORS: Record<string, string> = {
+  food: "#F59E0B",
+  attraction: "#2563EB",
+  museum: "#7C3AED",
+  park: "#16A34A",
+  landmark: "#DC2626",
+  nightlife: "#DB2777",
+  shopping: "#EA580C",
+  transport: "#0891B2",
+  hotel: "#059669",
+  event: "#9333EA",
+  hidden_gem: "#CA8A04",
+  nature: "#15803D",
+  sport: "#1D4ED8",
+  healthcare: "#DC2626",
+  other: "#6B7280",
+};
 
 function createPlaceIcon(category: string) {
-  const colors: Record<string, string> = {
-    food: "#F59E0B",
-    attraction: "#2563EB",
-    museum: "#7C3AED",
-    park: "#16A34A",
-    landmark: "#DC2626",
-    nightlife: "#DB2777",
-    shopping: "#EA580C",
-    transport: "#0891B2",
-    hotel: "#059669",
-    event: "#9333EA",
-    hidden_gem: "#CA8A04",
-    nature: "#15803D",
-    sport: "#1D4ED8",
-    healthcare: "#DC2626",
-    other: "#6B7280",
-  };
-  const color = colors[category] || "#6B7280";
+  const color = CATEGORY_COLORS[category] ?? "#6B7280";
   return L.divIcon({
-    html: `<div style="width:12px;height:12px;background:${color};border:2px solid white;border-radius:50%;box-shadow:0 1px 3px rgba(0,0,0,0.3)"></div>`,
-    className: "",
-    iconSize: [12, 12],
-    iconAnchor: [6, 6],
-  });
-}
-
-function createUserIcon() {
-  return L.divIcon({
-    html: `<div style="width:14px;height:14px;background:#2563EB;border:3px solid white;border-radius:50%;box-shadow:0 0 0 4px rgba(37,99,235,0.2)"></div>`,
+    html: `<div style="width:14px;height:14px;background:${color};border:2.5px solid white;border-radius:50%;box-shadow:0 1px 4px rgba(0,0,0,0.35)"></div>`,
     className: "",
     iconSize: [14, 14],
     iconAnchor: [7, 7],
   });
 }
 
-function FlyToLocation({ center }: { center: Coordinates }) {
+function createUserIcon() {
+  return L.divIcon({
+    html: `<div style="width:16px;height:16px;background:#2563EB;border:3px solid white;border-radius:50%;box-shadow:0 0 0 5px rgba(37,99,235,0.18)"></div>`,
+    className: "",
+    iconSize: [16, 16],
+    iconAnchor: [8, 8],
+  });
+}
+
+// Fly to a new center whenever it changes
+function FlyToCenter({ center }: { center: Coordinates }) {
   const map = useMap();
   useEffect(() => {
-    map.flyTo([center.lat, center.lon], map.getZoom(), { duration: 1 });
-  }, [center.lat, center.lon, map]);
+    map.flyTo([center.lat, center.lon], map.getZoom(), { duration: 0.8, easeLinearity: 0.5 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [center.lat, center.lon]);
   return null;
 }
 
@@ -83,16 +87,13 @@ export function MapViewInner({
   onPlaceClick,
   className = "w-full h-full",
 }: MapViewProps) {
-  const mapRef = useRef<L.Map | null>(null);
-
   return (
     <MapContainer
       center={[center.lat, center.lon]}
       zoom={zoom}
       className={className}
-      ref={mapRef}
       zoomControl={false}
-      style={{ background: "#f8f9fa" }}
+      style={{ background: "#f0f0f0" }}
     >
       <TileLayer
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -100,20 +101,26 @@ export function MapViewInner({
         maxZoom={19}
       />
       <ZoomControl position="bottomright" />
-      <FlyToLocation center={center} />
+      <FlyToCenter center={center} />
 
       {userCoords && (
         <>
           <Marker position={[userCoords.lat, userCoords.lon]} icon={createUserIcon()}>
             <Popup closeButton={false}>
-              <p className="text-xs font-medium text-text-primary">You are here</p>
+              <p style={{ margin: 0, fontSize: 12, fontWeight: 600 }}>You are here</p>
             </Popup>
           </Marker>
           {showRadius && (
             <Circle
               center={[userCoords.lat, userCoords.lon]}
               radius={radius}
-              pathOptions={{ color: "#2563EB", fillColor: "#2563EB", fillOpacity: 0.04, weight: 1, dashArray: "4,4" }}
+              pathOptions={{
+                color: "#2563EB",
+                fillColor: "#2563EB",
+                fillOpacity: 0.05,
+                weight: 1.5,
+                dashArray: "5,5",
+              }}
             />
           )}
         </>
@@ -124,25 +131,27 @@ export function MapViewInner({
           key={place.id}
           position={[place.coordinates.lat, place.coordinates.lon]}
           icon={createPlaceIcon(place.category)}
-          eventHandlers={{
-            click: () => onPlaceClick?.(place),
-          }}
+          eventHandlers={{ click: () => onPlaceClick?.(place) }}
         >
-          <Popup closeButton={false} className="tripant-popup">
-            <div className="min-w-[160px]">
-              <p className="font-medium text-sm text-text-primary mb-0.5">{place.name}</p>
+          <Popup closeButton={false}>
+            <div style={{ minWidth: 160 }}>
+              <p style={{ margin: "0 0 2px", fontSize: 13, fontWeight: 600 }}>{place.name}</p>
               {place.address && (
-                <p className="text-xs text-text-secondary mb-1 line-clamp-1">{place.address}</p>
+                <p style={{ margin: "0 0 4px", fontSize: 11, color: "#6B7280", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {place.address}
+                </p>
               )}
               {place.distance !== undefined && (
-                <p className="text-xs text-accent font-medium">{formatDistance(place.distance)} away</p>
+                <p style={{ margin: "0 0 4px", fontSize: 11, color: "#2563EB", fontWeight: 500 }}>
+                  {formatDistance(place.distance)} away
+                </p>
               )}
-              <Link
+              <a
                 href={`/place/${encodeURIComponent(place.id)}`}
-                className="mt-1.5 block text-xs font-medium text-accent hover:underline"
+                style={{ fontSize: 11, fontWeight: 600, color: "#2563EB", textDecoration: "none" }}
               >
                 View details →
-              </Link>
+              </a>
             </div>
           </Popup>
         </Marker>

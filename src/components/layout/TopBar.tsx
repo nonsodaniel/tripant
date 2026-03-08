@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Compass, Map, Briefcase, Bookmark, History, CalendarDays } from "lucide-react";
 import { SearchBar } from "@/components/ui/SearchBar";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { clsx } from "clsx";
 
 const NAV_ITEMS = [
@@ -20,6 +21,7 @@ export function TopBar() {
 
   return (
     <header className="hidden lg:flex sticky top-0 z-40 bg-surface border-b border-border h-14 items-center px-6 gap-6">
+      {/* Logo */}
       <Link href="/explore" className="flex items-center gap-2 flex-shrink-0">
         <div className="w-7 h-7 rounded-lg bg-accent flex items-center justify-center">
           <Compass className="w-4 h-4 text-white" strokeWidth={2.5} />
@@ -27,6 +29,7 @@ export function TopBar() {
         <span className="font-semibold text-text-primary text-base">Tripant</span>
       </Link>
 
+      {/* Nav links */}
       <nav className="flex items-center gap-1">
         {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
           const active = pathname.startsWith(href);
@@ -48,8 +51,12 @@ export function TopBar() {
         })}
       </nav>
 
-      <div className="flex-1 max-w-xs ml-auto">
-        <SearchBar compact />
+      {/* Right: search + theme toggle */}
+      <div className="flex items-center gap-2 ml-auto">
+        <div className="w-56">
+          <SearchBar compact />
+        </div>
+        <ThemeToggle />
       </div>
     </header>
   );
