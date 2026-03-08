@@ -1,6 +1,10 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+// Leaflet CSS must be a top-level import so webpack bundles it with the
+// initial page CSS. Importing inside a dynamic ssr:false component is
+// unreliable in Next.js App Router (PostCSS can't resolve @import at build time).
+import "leaflet/dist/leaflet.css";
 import { AppShell } from "@/components/layout/AppShell";
 import { ThemeScript } from "@/components/ui/ThemeScript";
 
