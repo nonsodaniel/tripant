@@ -11,7 +11,7 @@ interface PlaceGridProps {
 export function PlaceGrid({ places, layout = "grid", className }: PlaceGridProps) {
   if (layout === "list") {
     return (
-      <div className={clsx("flex flex-col gap-2", className)}>
+      <div className={clsx("flex flex-col gap-2 stagger", className)}>
         {places.map((place) => (
           <PlaceCard key={place.id} place={place} horizontal />
         ))}
@@ -20,7 +20,7 @@ export function PlaceGrid({ places, layout = "grid", className }: PlaceGridProps
   }
 
   return (
-    <div className={clsx("grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3", className)}>
+    <div className={clsx("grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 stagger", className)}>
       {places.map((place) => (
         <PlaceCard key={place.id} place={place} />
       ))}

@@ -18,6 +18,7 @@ import {
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { PlaceDetailSkeleton } from "@/components/ui/Skeleton";
+import { PlaceImage } from "@/components/ui/PlaceImage";
 import { useSavedStore } from "@/lib/store/useSavedStore";
 import { useLocationStore } from "@/lib/store/useLocationStore";
 import type { Place } from "@/types";
@@ -92,25 +93,25 @@ export default function PlaceDetailPage({ params }: PageProps) {
   }
 
   return (
-    <div className="max-w-3xl mx-auto">
+    <div className="max-w-3xl mx-auto animate-fade-in">
       {/* Header */}
       <div className="sticky top-0 lg:top-14 z-30 bg-surface border-b border-border px-4 h-14 flex items-center gap-3">
         <button
           onClick={() => router.back()}
-          className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-surface-secondary transition-colors duration-150"
+          className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-surface-secondary active:scale-90 transition-all duration-150"
         >
           <ArrowLeft className="w-5 h-5 text-text-primary" />
         </button>
         <p className="font-semibold text-text-primary flex-1 truncate">{place.name}</p>
         <button
           onClick={handleShare}
-          className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-surface-secondary transition-colors duration-150 text-text-secondary"
+          className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-surface-secondary active:scale-90 transition-all duration-150 text-text-secondary"
         >
           <Share2 className="w-4 h-4" />
         </button>
         <button
           onClick={() => saved ? unsavePlace(place.id) : savePlace(place)}
-          className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-surface-secondary transition-colors duration-150"
+          className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-surface-secondary active:scale-90 transition-all duration-150"
           aria-label={saved ? "Unsave" : "Save"}
         >
           {saved ? (
@@ -121,12 +122,15 @@ export default function PlaceDetailPage({ params }: PageProps) {
         </button>
       </div>
 
-      {/* Hero image placeholder */}
-      <div className="h-52 sm:h-64 bg-surface-secondary flex items-center justify-center text-5xl">
-        {getCategoryEmoji(place.category)}
-      </div>
+      {/* Hero image */}
+      <PlaceImage
+        name={place.name}
+        category={place.category}
+        className="h-52 sm:h-64 w-full"
+        emojiClassName="text-5xl"
+      />
 
-      <div className="px-4 py-5 space-y-6">
+      <div className="px-4 py-5 space-y-6 animate-slide-up">
         {/* Title section */}
         <div>
           <div className="flex items-start justify-between gap-3">
@@ -216,14 +220,20 @@ export default function PlaceDetailPage({ params }: PageProps) {
         {nearbyPlaces.length > 0 && (
           <section>
             <h2 className="text-base font-semibold text-text-primary mb-3">Nearby</h2>
-            <div className="space-y-2">
+            <div className="space-y-2 stagger">
               {nearbyPlaces.map((nearby) => (
                 <a
                   key={nearby.id}
                   href={`/place/${encodeURIComponent(nearby.id)}`}
-                  className="flex items-center gap-3 p-3 bg-surface border border-border rounded-xl hover:shadow-card-hover transition-all duration-150"
+                  className="flex items-center gap-3 p-3 bg-surface border border-border rounded-xl hover:shadow-card-hover hover:border-border-strong active:scale-[0.98] transition-all duration-150"
                 >
-                  <span className="text-xl">{getCategoryEmoji(nearby.category)}</span>
+                  <PlaceImage
+                    name={nearby.name}
+                    category={nearby.category}
+                    className="w-10 h-10 rounded-lg flex-shrink-0"
+                    emojiClassName="text-sm"
+                    fetchPhoto={false}
+                  />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-text-primary truncate">{nearby.name}</p>
                     <p className="text-xs text-text-secondary">{CATEGORY_LABELS[nearby.category]}</p>
