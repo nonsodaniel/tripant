@@ -68,6 +68,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 window.addEventListener('load', function() {
                   navigator.serviceWorker.register('/sw.js').catch(function() {});
                 });
+
+                // When a new SW activates and sends SW_ACTIVATED, reload the page
+                // so the browser gets fresh HTML, CSS, and JS chunks — preventing
+                // stale chunk-load errors and broken styles from old cached payloads.
+                navigator.serviceWorker.addEventListener('message', function(e) {
+                  if (e.data && e.data.type === 'SW_ACTIVATED') {
+                    window.location.reload();
+                  }
+                });
               }
             `,
           }}
