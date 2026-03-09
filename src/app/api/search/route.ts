@@ -15,9 +15,16 @@ export async function GET(request: NextRequest) {
   if (category && !isNaN(lat) && !isNaN(lon)) {
     try {
       const places = await fetchNearbyPlaces({ lat, lon, radius: 5000, category, limit: 50 });
-      return NextResponse.json(places);
+      return NextResponse.json(places, {
+        headers: { "Cache-Control": "public, s-maxage=300, stale-while-revalidate=600" },
+      });
     } catch (error) {
-      return NextResponse.json({ error: "Search failed" }, { status: 500 });
+      const message = error instanceof Error ? error.message : "Unknown error";
+      console.error("Search (category) error:", message);
+      return NextResponse.json(
+        { error: "Search temporarily unavailable. Please retry." },
+        { status: 503, headers: { "Retry-After": "5" } }
+      );
     }
   }
 
@@ -28,7 +35,6 @@ export async function GET(request: NextRequest) {
   try {
     const results = await searchPlaces(q, 10);
 
-    // If asPlaces, convert to Place format and optionally fetch nearby
     if (asPlaces && results.length > 0) {
       const places = results.map((r) => ({
         id: r.id,
@@ -47,7 +53,11 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("Search API error:", error);
-    return NextResponse.json({ error: "Search failed" }, { status: 500 });
+    const message = error instanceof Error ? error.message : "Unknown error";
+    console.error("Search API error:", message);
+    return NextResponse.json(
+      { error: "Search temporarily unavailable. Please retry." },
+      { status: 503, headers: { "Retry-After": "5" } }
+    );
   }
 }

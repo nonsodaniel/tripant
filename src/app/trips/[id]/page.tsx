@@ -24,7 +24,7 @@ interface PageProps {
 export default function TripDetailPage({ params }: PageProps) {
   const { id } = use(params);
   const router = useRouter();
-  const { getTrip, addDay, removePlaceFromDay, updateTrip } = useTripsStore();
+  const { getTrip, addDay, removeDay, removePlaceFromDay, reorderPlaces } = useTripsStore();
   const trip = getTrip(id);
   const [addingDay, setAddingDay] = useState(false);
   const [newDayDate, setNewDayDate] = useState("");
@@ -103,9 +103,11 @@ export default function TripDetailPage({ params }: PageProps) {
         </div>
         <div className="flex-1 p-3 bg-surface border border-border rounded-xl text-center">
           <p className="text-xl font-bold text-text-primary">
-            {trip.destination.slice(0, 2).toUpperCase()}
+            {trip.days.reduce((sum, d) => sum + d.places.length, 0) > 0
+              ? Math.ceil(trip.days.reduce((sum, d) => sum + d.places.length, 0) * 1.5)
+              : 0}
           </p>
-          <p className="text-xs text-text-secondary mt-0.5">Destination</p>
+          <p className="text-xs text-text-secondary mt-0.5">Est. hrs</p>
         </div>
       </div>
 
@@ -124,6 +126,8 @@ export default function TripDetailPage({ params }: PageProps) {
               day={day}
               tripId={trip.id}
               onRemovePlace={(dayId, tripPlaceId) => removePlaceFromDay(trip.id, dayId, tripPlaceId)}
+              onReorderPlaces={(dayId, from, to) => reorderPlaces(trip.id, dayId, from, to)}
+              onRemoveDay={(dayId) => removeDay(trip.id, dayId)}
             />
           ))
         )}

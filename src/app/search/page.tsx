@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
+import { useEffect, useState, Suspense, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { ArrowLeft, Search } from "lucide-react";
+import { ArrowLeft, Search, RefreshCw } from "lucide-react";
 import { PlaceCard } from "@/components/places/PlaceCard";
 import { CategoryFilter } from "@/components/places/CategoryFilter";
 import { PageSpinner } from "@/components/ui/Spinner";
@@ -21,32 +21,53 @@ function SearchContent() {
   const { coordinates } = useLocationStore();
   const [places, setPlaces] = useState<Place[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(initialCategory);
 
-  useEffect(() => {
-    async function doSearch() {
-      if (!q && !selectedCategory) return;
-      setLoading(true);
-      try {
-        let url = "";
-        if (selectedCategory && coordinates) {
-          url = `/api/places?lat=${coordinates.lat}&lon=${coordinates.lon}&radius=5000&category=${selectedCategory}`;
-        } else if (q) {
-          url = `/api/search?q=${encodeURIComponent(q)}&asPlaces=true`;
-          if (coordinates) url += `&lat=${coordinates.lat}&lon=${coordinates.lon}`;
-        }
-        if (!url) return;
-        const res = await fetch(url);
-        if (res.ok) {
-          const data: Place[] = await res.json();
-          setPlaces(data);
-        }
-      } finally {
+  const doSearch = useCallback(async () => {
+    if (!q && !selectedCategory) return;
+    setLoading(true);
+    setError(null);
+    try {
+      let url = "";
+      if (selectedCategory && coordinates) {
+        url = `/api/places?lat=${coordinates.lat}&lon=${coordinates.lon}&radius=5000&category=${selectedCategory}`;
+      } else if (selectedCategory && !coordinates) {
+        // No location — show a prompt, don't make a broken API call
+        setPlaces([]);
         setLoading(false);
+        return;
+      } else if (q) {
+        url = `/api/search?q=${encodeURIComponent(q)}&asPlaces=true`;
+        if (coordinates) url += `&lat=${coordinates.lat}&lon=${coordinates.lon}`;
       }
+      if (!url) { setLoading(false); return; }
+
+      const res = await fetch(url);
+      if (res.status === 503) {
+        setError("Service temporarily unavailable. Tap to retry.");
+        setLoading(false);
+        return;
+      }
+      if (!res.ok) {
+        setError("Search failed. Please try again.");
+        setLoading(false);
+        return;
+      }
+      const data = await res.json();
+      setPlaces(Array.isArray(data) ? data : []);
+    } catch {
+      setError("Network error. Check your connection and retry.");
+    } finally {
+      setLoading(false);
     }
-    doSearch();
   }, [q, selectedCategory, coordinates]);
+
+  useEffect(() => {
+    doSearch();
+  }, [doSearch]);
+
+  const needsLocation = selectedCategory && !coordinates && !q;
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-4">
@@ -63,9 +84,9 @@ function SearchContent() {
         </div>
       </div>
 
-      {q && (
+      {q && !loading && (
         <p className="text-sm text-text-secondary mb-4">
-          {loading ? "Searching…" : `${places.length} results for "${q}"`}
+          {`${places.length} result${places.length !== 1 ? "s" : ""} for "${q}"`}
         </p>
       )}
 
@@ -83,16 +104,33 @@ function SearchContent() {
         </div>
       )}
 
-      {!loading && places.length === 0 && (q || selectedCategory) && (
+      {!loading && error && (
         <EmptyState
-          icon={<Search className="w-6 h-6" />}
-          title="No results found"
-          description={`Try a different search term or category.`}
+          icon={<RefreshCw className="w-6 h-6" />}
+          title="Something went wrong"
+          description={error}
+          action={{ label: "Retry", onClick: doSearch }}
         />
       )}
 
-      {!loading && places.length > 0 && (
-        <div className="grid sm:grid-cols-2 gap-3">
+      {!loading && !error && needsLocation && (
+        <EmptyState
+          icon={<Search className="w-6 h-6" />}
+          title="Location needed"
+          description="Enable location access to search by category."
+        />
+      )}
+
+      {!loading && !error && !needsLocation && places.length === 0 && (q || selectedCategory) && (
+        <EmptyState
+          icon={<Search className="w-6 h-6" />}
+          title="No results found"
+          description="Try a different search term or adjust the category filter."
+        />
+      )}
+
+      {!loading && !error && places.length > 0 && (
+        <div className="grid sm:grid-cols-2 gap-3 stagger">
           {places.map((place) => (
             <PlaceCard key={place.id} place={place} />
           ))}

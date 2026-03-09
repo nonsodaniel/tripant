@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { CalendarDays, Navigation } from "lucide-react";
+import { useEffect, useState, useCallback } from "react";
+import { CalendarDays, Navigation, RefreshCw } from "lucide-react";
 import { PlaceCard } from "@/components/places/PlaceCard";
 import { PlaceCardSkeleton } from "@/components/ui/Skeleton";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -12,15 +12,34 @@ export default function EventsPage() {
   const { coordinates, locate } = useGeolocation();
   const [events, setEvents] = useState<Place[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const load = useCallback(async () => {
     if (!coordinates) return;
     setLoading(true);
-    fetch(`/api/events?lat=${coordinates.lat}&lon=${coordinates.lon}`)
-      .then((r) => (r.ok ? r.json() : []))
-      .then((data: Place[]) => setEvents(data))
-      .finally(() => setLoading(false));
+    setError(null);
+    try {
+      const res = await fetch(
+        `/api/events?lat=${coordinates.lat}&lon=${coordinates.lon}`
+      );
+      if (res.status === 503) {
+        setError("Events service temporarily unavailable.");
+        return;
+      }
+      if (!res.ok) {
+        setError("Failed to load events. Tap to retry.");
+        return;
+      }
+      const data = await res.json();
+      setEvents(Array.isArray(data) ? data : []);
+    } catch {
+      setError("Network error. Check your connection.");
+    } finally {
+      setLoading(false);
+    }
   }, [coordinates]);
+
+  useEffect(() => { load(); }, [load]);
 
   return (
     <div className="max-w-3xl mx-auto">
@@ -31,6 +50,8 @@ export default function EventsPage() {
           {coordinates
             ? loading
               ? "Searching nearby…"
+              : error
+              ? "Could not load events"
               : `${events.length} venues & events found`
             : "Discover what's happening near you"}
         </p>
@@ -54,7 +75,16 @@ export default function EventsPage() {
           </div>
         )}
 
-        {coordinates && !loading && events.length === 0 && (
+        {coordinates && !loading && error && (
+          <EmptyState
+            icon={<RefreshCw className="w-6 h-6" />}
+            title="Couldn't load events"
+            description={error}
+            action={{ label: "Retry", onClick: load }}
+          />
+        )}
+
+        {coordinates && !loading && !error && events.length === 0 && (
           <EmptyState
             icon={<CalendarDays className="w-6 h-6" />}
             title="No events found"
@@ -62,7 +92,7 @@ export default function EventsPage() {
           />
         )}
 
-        {!loading && events.length > 0 && (
+        {!loading && !error && events.length > 0 && (
           <div className="grid sm:grid-cols-2 gap-3 stagger">
             {events.map((event) => (
               <PlaceCard key={event.id} place={event} />

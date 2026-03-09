@@ -1,6 +1,9 @@
-const CACHE_NAME = "tripant-v2";
-const TILE_CACHE = "tripant-tiles-v1";
-const API_CACHE  = "tripant-api-v1";
+// Increment this version whenever you deploy a new build.
+// This forces the SW to reinstall, clearing all old caches.
+const VERSION = "v5";
+
+const CACHE_STATIC = `tripant-static-${VERSION}`;
+const TILE_CACHE   = `tripant-tiles-${VERSION}`;
 
 const STATIC_ASSETS = [
   "/manifest.json",
@@ -9,23 +12,23 @@ const STATIC_ASSETS = [
   "/leaflet/leaflet.css",
 ];
 
-// Install: pre-cache only stable, non-hashed assets
+// ── Install: pre-cache small set of stable static assets ────────────────────
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME)
+    caches.open(CACHE_STATIC)
       .then((cache) => cache.addAll(STATIC_ASSETS))
-      .then(() => self.skipWaiting())
+      .then(() => self.skipWaiting())  // activate immediately
   );
 });
 
-// Activate: delete every old cache so stale JS/CSS chunks can't linger
+// ── Activate: delete ALL old caches so stale chunks never linger ─────────────
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys()
       .then((keys) =>
         Promise.all(
           keys
-            .filter((k) => k !== CACHE_NAME && k !== TILE_CACHE && k !== API_CACHE)
+            .filter((k) => k !== CACHE_STATIC && k !== TILE_CACHE)
             .map((k) => caches.delete(k))
         )
       )
@@ -33,65 +36,31 @@ self.addEventListener("activate", (event) => {
   );
 });
 
+// ── Fetch strategy ───────────────────────────────────────────────────────────
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
 
-  // ─── CRITICAL: never intercept Next.js build artefacts ──────────────
-  // _next/static/ files are content-hashed by Next.js; the browser's
-  // built-in HTTP cache handles them correctly. If the SW intercepts them
-  // with a cache-first strategy it can serve stale chunks from a previous
-  // build, which strips styles or causes JS errors after every deploy.
+  // 1. NEVER touch Next.js build artifacts — content-hashed, always fresh
   if (url.pathname.startsWith("/_next/")) return;
 
-  // Map tiles — cache-first, long-lived
+  // 2. Map tiles — cache-first (tiles never change for a given zoom/x/y)
   if (
-    url.hostname.includes("openstreetmap.org") &&
-    url.pathname.includes("/tile")
+    url.hostname.includes("tile.openstreetmap.org") ||
+    (url.hostname.includes("openstreetmap.org") && url.pathname.includes("/tile"))
   ) {
-    event.respondWith(
-      caches.open(TILE_CACHE).then(async (cache) => {
-        const cached = await cache.match(event.request);
-        if (cached) return cached;
-        const response = await fetch(event.request);
-        if (response.ok) cache.put(event.request, response.clone());
-        return response;
-      })
-    );
+    event.respondWith(tileFirst(event.request));
     return;
   }
 
-  // Wikipedia photo API — stale-while-revalidate (photos rarely change)
-  if (
-    url.hostname.includes("wikipedia.org") ||
-    url.hostname.includes("wikimedia.org")
-  ) {
-    event.respondWith(
-      caches.open(API_CACHE).then(async (cache) => {
-        const cached = await cache.match(event.request);
-        const fresh = fetch(event.request)
-          .then((r) => { if (r.ok) cache.put(event.request, r.clone()); return r; })
-          .catch(() => cached);
-        return cached ?? fresh;
-      })
-    );
-    return;
-  }
-
-  // Internal API routes — stale-while-revalidate
+  // 3. Internal API routes — NETWORK-FIRST
+  //    Always try the network first. Only fall back to cache when offline.
+  //    This prevents stale empty-array or error responses from being served.
   if (url.pathname.startsWith("/api/")) {
-    event.respondWith(
-      caches.open(API_CACHE).then(async (cache) => {
-        const cached = await cache.match(event.request);
-        const fresh = fetch(event.request)
-          .then((r) => { if (r.ok) cache.put(event.request, r.clone()); return r; })
-          .catch(() => cached);
-        return cached ?? fresh;
-      })
-    );
+    event.respondWith(networkFirst(event.request, CACHE_STATIC, 12));
     return;
   }
 
-  // Page navigation — network-first, fall back to cache for offline
+  // 4. Page navigation — network-first, offline fallback to /explore
   if (event.request.mode === "navigate") {
     event.respondWith(
       fetch(event.request).catch(() =>
@@ -101,18 +70,63 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Stable public assets (icons, manifest, leaflet CSS) — cache-first
-  event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) return cached;
-      return fetch(event.request).then((response) => {
-        if (response.ok && event.request.method === "GET") {
-          caches.open(CACHE_NAME).then((cache) =>
-            cache.put(event.request, response.clone())
-          );
-        }
-        return response;
-      });
-    })
-  );
+  // 5. Static public assets (icons, manifest, leaflet CSS) — cache-first
+  if (
+    url.pathname.startsWith("/icons/") ||
+    url.pathname.startsWith("/leaflet/") ||
+    url.pathname === "/manifest.json"
+  ) {
+    event.respondWith(cacheFirst(event.request, CACHE_STATIC));
+    return;
+  }
+
+  // 6. Everything else — network only (do not cache)
+  // This avoids accidentally caching page HTML or other dynamic content.
 });
+
+// ── Strategy helpers ─────────────────────────────────────────────────────────
+
+async function networkFirst(request, cacheName, maxAgeHours = 24) {
+  const cache = await caches.open(cacheName);
+  try {
+    const response = await fetch(request);
+    // Only cache successful, non-empty responses
+    if (response.ok) {
+      const clone = response.clone();
+      // Peek at the response body — don't cache empty arrays
+      clone.json().then((body) => {
+        if (Array.isArray(body) && body.length === 0) return; // skip empty arrays
+        cache.put(request, response.clone());
+      }).catch(() => {
+        // Not JSON or parse error — cache it anyway (e.g. weather object)
+        cache.put(request, response.clone());
+      });
+    }
+    return response;
+  } catch {
+    // Offline — try cache
+    const cached = await cache.match(request);
+    return cached ?? new Response(
+      JSON.stringify({ error: "You are offline" }),
+      { status: 503, headers: { "Content-Type": "application/json" } }
+    );
+  }
+}
+
+async function tileFirst(request) {
+  const cache = await caches.open(TILE_CACHE);
+  const cached = await cache.match(request);
+  if (cached) return cached;
+  const response = await fetch(request);
+  if (response.ok) cache.put(request, response.clone());
+  return response;
+}
+
+async function cacheFirst(request, cacheName) {
+  const cache = await caches.open(cacheName);
+  const cached = await cache.match(request);
+  if (cached) return cached;
+  const response = await fetch(request);
+  if (response.ok) cache.put(request, response.clone());
+  return response;
+}

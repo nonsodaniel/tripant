@@ -13,8 +13,16 @@ interface UseNearbyPlacesOptions {
 
 async function fetchNearby(url: string): Promise<Place[]> {
   const res = await fetch(url);
-  if (!res.ok) throw new Error("Failed to fetch places");
-  return res.json();
+  if (res.status === 503) {
+    // Service temporarily unavailable — throw so SWR retries
+    throw new Error("Places service temporarily unavailable");
+  }
+  if (!res.ok) {
+    throw new Error(`Failed to fetch places (${res.status})`);
+  }
+  const data = await res.json();
+  // Guard: API might return an error object instead of array
+  return Array.isArray(data) ? data : [];
 }
 
 export function useNearbyPlaces(options: UseNearbyPlacesOptions) {
@@ -37,8 +45,13 @@ export function useNearbyPlaces(options: UseNearbyPlacesOptions) {
     {
       revalidateOnFocus: false,
       revalidateOnReconnect: true,
-      dedupingInterval: 60000,
-      errorRetryCount: 2,
+      dedupingInterval: 30000,      // 30s dedup (reduced from 60s)
+      errorRetryCount: 3,
+      errorRetryInterval: 3000,     // retry after 3s on error
+      shouldRetryOnError: (err) => {
+        // Retry on 503 (rate limit / timeout) but not on 4xx
+        return err.message.includes("503") || err.message.includes("unavailable");
+      },
     }
   );
 

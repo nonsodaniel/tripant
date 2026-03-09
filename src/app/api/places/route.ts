@@ -29,7 +29,16 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("Places API error:", error);
-    return NextResponse.json({ error: "Failed to fetch places" }, { status: 500 });
+    const message = error instanceof Error ? error.message : "Unknown error";
+    console.error("Places API error:", message);
+
+    // Return a 503 (service unavailable) instead of 500 so clients know to retry
+    return NextResponse.json(
+      { error: "Places temporarily unavailable. Please retry.", details: message },
+      {
+        status: 503,
+        headers: { "Retry-After": "5" },
+      }
+    );
   }
 }

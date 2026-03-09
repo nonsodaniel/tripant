@@ -2,6 +2,29 @@ import type { Place, Category, NearbyQuery, Coordinates } from "@/types";
 
 const OVERPASS_API = "https://overpass-api.de/api/interpreter";
 
+// Simple in-process cache so repeated identical requests don't hammer Overpass
+interface CacheEntry {
+  data: Place[];
+  expiresAt: number;
+}
+const _cache = new Map<string, CacheEntry>();
+
+function getCached(key: string): Place[] | null {
+  const entry = _cache.get(key);
+  if (!entry) return null;
+  if (Date.now() > entry.expiresAt) { _cache.delete(key); return null; }
+  return entry.data;
+}
+
+function setCached(key: string, data: Place[], ttlMs: number) {
+  // Limit cache size to 100 entries
+  if (_cache.size >= 100) {
+    const oldest = _cache.keys().next().value;
+    if (oldest) _cache.delete(oldest);
+  }
+  _cache.set(key, { data, expiresAt: Date.now() + ttlMs });
+}
+
 const CATEGORY_QUERIES: Record<Category, string> = {
   food: `node["amenity"~"restaurant|cafe|bar|pub|fast_food|food_court|bakery"](around:{radius},{lat},{lon});`,
   attraction: `node["tourism"~"attraction|artwork|viewpoint|theme_park"](around:{radius},{lat},{lon});`,
@@ -139,16 +162,31 @@ export async function fetchNearbyPlaces(
 ): Promise<Place[]> {
   const { lat, lon, radius = 2000, category, limit = 50 } = query;
 
+  // Round coords to 3 dp for cache key (~100m granularity)
+  const cacheKey = `nearby:${lat.toFixed(3)},${lon.toFixed(3)},${radius},${category ?? "all"}`;
+  const cached = getCached(cacheKey);
+  if (cached) return cached.slice(0, limit);
+
   const overpassQuery = category
     ? buildQuery(lat, lon, radius, category)
     : buildMultiCategoryQuery(lat, lon, radius);
 
-  const response = await fetch(OVERPASS_API, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: `data=${encodeURIComponent(overpassQuery)}`,
-    signal: AbortSignal.timeout(35000),
-  });
+  let response: Response;
+  try {
+    response = await fetch(OVERPASS_API, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: `data=${encodeURIComponent(overpassQuery)}`,
+      signal: AbortSignal.timeout(25000),
+    });
+  } catch (err) {
+    // Network error or timeout — re-throw so the API route can handle it
+    throw new Error(`Overpass fetch failed: ${(err as Error).message}`);
+  }
+
+  if (response.status === 429 || response.status === 503) {
+    throw new Error(`Overpass rate limited or unavailable (${response.status})`);
+  }
 
   if (!response.ok) {
     throw new Error(`Overpass API error: ${response.status}`);
@@ -157,11 +195,18 @@ export async function fetchNearbyPlaces(
   const data: OverpassResponse = await response.json();
   const userCoords: Coordinates = { lat, lon };
 
-  return data.elements
+  const places = data.elements
     .filter((el) => el.tags?.name)
     .map((el) => nodeToPlace(el, userCoords))
     .sort((a, b) => (a.distance ?? 0) - (b.distance ?? 0))
     .slice(0, limit);
+
+  // Cache non-empty results for 5 minutes
+  if (places.length > 0) {
+    setCached(cacheKey, places, 5 * 60 * 1000);
+  }
+
+  return places;
 }
 
 export async function fetchPlaceById(osmId: string): Promise<Place | null> {
@@ -194,7 +239,11 @@ export async function fetchEvents(
   lon: number,
   radius: number = 5000
 ): Promise<Place[]> {
-  const query = `[out:json][timeout:30];
+  const cacheKey = `events:${lat.toFixed(3)},${lon.toFixed(3)},${radius}`;
+  const cached = getCached(cacheKey);
+  if (cached) return cached;
+
+  const query = `[out:json][timeout:25];
 (
   node["amenity"~"events_venue|community_centre|theatre|cinema"](around:${radius},${lat},${lon});
   node["leisure"="stadium"](around:${radius},${lat},${lon});
@@ -206,7 +255,7 @@ out body center 40;`;
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: `data=${encodeURIComponent(query)}`,
-    signal: AbortSignal.timeout(35000),
+    signal: AbortSignal.timeout(28000),
   });
 
   if (!response.ok) throw new Error(`Overpass API error: ${response.status}`);
@@ -214,9 +263,14 @@ out body center 40;`;
   const data: OverpassResponse = await response.json();
   const userCoords: Coordinates = { lat, lon };
 
-  return data.elements
+  const places = data.elements
     .filter((el) => el.tags?.name)
     .map((el) => ({ ...nodeToPlace(el, userCoords), category: "event" as Category }))
     .sort((a, b) => (a.distance ?? 0) - (b.distance ?? 0))
     .slice(0, 30);
+
+  if (places.length > 0) {
+    setCached(cacheKey, places, 10 * 60 * 1000); // 10 min for events
+  }
+  return places;
 }

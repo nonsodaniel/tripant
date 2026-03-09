@@ -19,6 +19,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { PlaceDetailSkeleton } from "@/components/ui/Skeleton";
 import { PlaceImage } from "@/components/ui/PlaceImage";
+import { AddToTripModal } from "@/components/trips/AddToTripModal";
 import { useSavedStore } from "@/lib/store/useSavedStore";
 import { useLocationStore } from "@/lib/store/useLocationStore";
 import type { Place } from "@/types";
@@ -39,6 +40,7 @@ export default function PlaceDetailPage({ params }: PageProps) {
   const [nearbyPlaces, setNearbyPlaces] = useState<Place[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showAddToTrip, setShowAddToTrip] = useState(false);
 
   const { coordinates } = useLocationStore();
   const { isPlaceSaved, savePlace, unsavePlace, addToHistory } = useSavedStore();
@@ -50,7 +52,9 @@ export default function PlaceDetailPage({ params }: PageProps) {
       setError(null);
       try {
         const res = await fetch(`/api/places/${encodeURIComponent(placeId)}`);
-        if (!res.ok) throw new Error("Place not found");
+        if (res.status === 503) throw new Error("Service temporarily unavailable. Please retry.");
+        if (res.status === 404) throw new Error("Place not found");
+        if (!res.ok) throw new Error("Failed to load place details");
         const data: Place = await res.json();
         setPlace(data);
         addToHistory({ type: "view", placeId: data.id, placeName: data.name });
@@ -60,8 +64,10 @@ export default function PlaceDetailPage({ params }: PageProps) {
             `/api/places?lat=${data.coordinates.lat}&lon=${data.coordinates.lon}&radius=1000`
           );
           if (nearby.ok) {
-            const nearbyData: Place[] = await nearby.json();
-            setNearbyPlaces(nearbyData.filter((p) => p.id !== data.id).slice(0, 6));
+            const nearbyData = await nearby.json();
+            if (Array.isArray(nearbyData)) {
+              setNearbyPlaces(nearbyData.filter((p: Place) => p.id !== data.id).slice(0, 6));
+            }
           }
         }
       } catch (err) {
@@ -76,10 +82,16 @@ export default function PlaceDetailPage({ params }: PageProps) {
   if (loading) return <PlaceDetailSkeleton />;
 
   if (error || !place) {
+    const isRetryable = error?.includes("temporarily") || error?.includes("retry");
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] px-4">
-        <p className="text-text-secondary mb-4">{error || "Place not found"}</p>
-        <Button variant="secondary" onClick={() => router.back()}>Go back</Button>
+      <div className="flex flex-col items-center justify-center min-h-[60vh] px-4 gap-3">
+        <p className="text-text-secondary text-center">{error || "Place not found"}</p>
+        <div className="flex gap-2">
+          {isRetryable && (
+            <Button variant="primary" onClick={() => window.location.reload()}>Retry</Button>
+          )}
+          <Button variant="secondary" onClick={() => router.back()}>Go back</Button>
+        </div>
       </div>
     );
   }
@@ -93,6 +105,10 @@ export default function PlaceDetailPage({ params }: PageProps) {
   }
 
   return (
+    <>
+    {showAddToTrip && (
+      <AddToTripModal place={place} onClose={() => setShowAddToTrip(false)} />
+    )}
     <div className="max-w-3xl mx-auto animate-fade-in">
       {/* Header */}
       <div className="sticky top-0 lg:top-14 z-30 bg-surface border-b border-border px-4 h-14 flex items-center gap-3">
@@ -194,7 +210,7 @@ export default function PlaceDetailPage({ params }: PageProps) {
           <Button
             variant="secondary"
             icon={<Plus className="w-4 h-4" />}
-            onClick={() => router.push("/trips")}
+            onClick={() => setShowAddToTrip(true)}
           >
             Add to Trip
           </Button>
@@ -266,6 +282,7 @@ export default function PlaceDetailPage({ params }: PageProps) {
         )}
       </div>
     </div>
+    </>
   );
 }
 

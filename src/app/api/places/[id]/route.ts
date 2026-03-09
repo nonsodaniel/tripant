@@ -32,7 +32,11 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       },
     });
   } catch (error) {
-    console.error("Place detail API error:", error);
-    return NextResponse.json({ error: "Failed to fetch place" }, { status: 500 });
+    const message = error instanceof Error ? error.message : "Unknown error";
+    console.error("Place detail API error:", message);
+    return NextResponse.json(
+      { error: "Place details temporarily unavailable. Please retry." },
+      { status: 503, headers: { "Retry-After": "5" } }
+    );
   }
 }
