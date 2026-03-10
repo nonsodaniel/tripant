@@ -7,22 +7,25 @@ import { CategoryFilter } from "./CategoryFilter";
 import { PlaceCardSkeleton } from "@/components/ui/Skeleton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import type { Category, Coordinates } from "@/types";
-import { MapPin } from "lucide-react";
+import { MapPin, Wifi, RefreshCw } from "lucide-react";
 
 interface NearbySectionProps {
   coordinates: Coordinates;
+  hideWhenEmpty?: boolean;
 }
 
-export function NearbySection({ coordinates }: NearbySectionProps) {
+export function NearbySection({ coordinates, hideWhenEmpty }: NearbySectionProps) {
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
   const [layout, setLayout] = useState<"grid" | "list">("grid");
 
-  const { places, isLoading, error, refetch } = useNearbyPlaces({
+  const { places, isLoading, error, isNetworkError, refetch } = useNearbyPlaces({
     lat: coordinates.lat,
     lon: coordinates.lon,
     radius: 2000,
     category: selectedCategory || undefined,
   });
+
+  if (hideWhenEmpty && !isLoading && !error && places.length === 0) return null;
 
   return (
     <section>
@@ -76,9 +79,15 @@ export function NearbySection({ coordinates }: NearbySectionProps) {
 
       {error && !isLoading && (
         <EmptyState
-          icon={<MapPin className="w-6 h-6" />}
-          title="Couldn't load places"
-          description="Check your connection and try again."
+          icon={isNetworkError
+            ? <Wifi className="w-6 h-6" />
+            : <RefreshCw className="w-6 h-6" />
+          }
+          title={isNetworkError ? "No internet connection" : "Places temporarily unavailable"}
+          description={isNetworkError
+            ? "Check your connection and try again."
+            : "Our places service is busy right now. Tap to retry — it usually resolves quickly."
+          }
           action={{ label: "Retry", onClick: () => refetch?.() }}
         />
       )}

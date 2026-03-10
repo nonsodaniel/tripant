@@ -7,8 +7,13 @@ interface RouteParams {
 }
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  const { id } = await params;
-  const placeId = decodeURIComponent(id);
+  let placeId: string;
+  try {
+    const { id } = await params;
+    placeId = decodeURIComponent(id);
+  } catch {
+    return NextResponse.json({ error: "Invalid place ID" }, { status: 400 });
+  }
 
   try {
     let place = null;
@@ -18,7 +23,6 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     } else if (placeId.startsWith("nom-")) {
       place = await fetchPlaceByNominatimId(placeId);
     } else {
-      // Try OSM format as fallback
       place = await fetchPlaceById(placeId);
     }
 
@@ -32,11 +36,17 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       },
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    console.error("Place detail API error:", message);
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("[/api/places/[id]] error:", message);
     return NextResponse.json(
       { error: "Place details temporarily unavailable. Please retry." },
-      { status: 503, headers: { "Retry-After": "5" } }
+      {
+        status: 503,
+        headers: {
+          "Retry-After": "5",
+          "Cache-Control": "no-store",
+        },
+      }
     );
   }
 }

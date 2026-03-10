@@ -1,8 +1,15 @@
 import type { Place, Category, NearbyQuery, Coordinates } from "@/types";
+import { haversineDistance } from "@/lib/utils/distance";
 
-const OVERPASS_API = "https://overpass-api.de/api/interpreter";
+// Multiple Overpass endpoints — tried in order, fallback on failure
+const OVERPASS_ENDPOINTS = [
+  "https://overpass-api.de/api/interpreter",
+  "https://overpass.kumi.systems/api/interpreter",
+  "https://overpass.openstreetmap.ru/api/interpreter",
+];
 
-// Simple in-process cache so repeated identical requests don't hammer Overpass
+// ─── In-process cache ────────────────────────────────────────────────────────
+
 interface CacheEntry {
   data: Place[];
   expiresAt: number;
@@ -17,7 +24,6 @@ function getCached(key: string): Place[] | null {
 }
 
 function setCached(key: string, data: Place[], ttlMs: number) {
-  // Limit cache size to 100 entries
   if (_cache.size >= 100) {
     const oldest = _cache.keys().next().value;
     if (oldest) _cache.delete(oldest);
@@ -25,56 +31,131 @@ function setCached(key: string, data: Place[], ttlMs: number) {
   _cache.set(key, { data, expiresAt: Date.now() + ttlMs });
 }
 
+// ─── Overpass query builders ──────────────────────────────────────────────────
+
 const CATEGORY_QUERIES: Record<Category, string> = {
-  food: `node["amenity"~"restaurant|cafe|bar|pub|fast_food|food_court|bakery"](around:{radius},{lat},{lon});`,
-  attraction: `node["tourism"~"attraction|artwork|viewpoint|theme_park"](around:{radius},{lat},{lon});`,
-  museum: `node["tourism"="museum"](around:{radius},{lat},{lon});`,
-  park: `(node["leisure"~"park|garden|playground"](around:{radius},{lat},{lon}); way["leisure"~"park|garden"](around:{radius},{lat},{lon}););`,
-  landmark: `(node["historic"](around:{radius},{lat},{lon}); node["tourism"~"monument|memorial"](around:{radius},{lat},{lon}););`,
-  nightlife: `node["amenity"~"nightclub|bar|pub|casino"](around:{radius},{lat},{lon});`,
-  shopping: `(node["shop"](around:{radius},{lat},{lon}); node["amenity"~"marketplace|shopping_centre"](around:{radius},{lat},{lon}););`,
-  transport: `(node["public_transport"~"station|stop_position"](around:{radius},{lat},{lon}); node["amenity"~"bus_station|taxi"](around:{radius},{lat},{lon}););`,
-  hotel: `node["tourism"~"hotel|motel|hostel|guest_house"](around:{radius},{lat},{lon});`,
-  event: `node["amenity"~"events_venue|theatre|cinema"](around:{radius},{lat},{lon});`,
-  hidden_gem: `(node["tourism"~"artwork|viewpoint"](around:{radius},{lat},{lon}); node["historic"~"ruins|castle|fort"](around:{radius},{lat},{lon}););`,
-  nature: `(node["natural"](around:{radius},{lat},{lon}); node["leisure"~"nature_reserve|park"](around:{radius},{lat},{lon}););`,
-  sport: `node["leisure"~"sports_centre|gym|stadium|pitch"](around:{radius},{lat},{lon});`,
-  healthcare: `node["amenity"~"hospital|clinic|pharmacy|doctors"](around:{radius},{lat},{lon});`,
-  other: `node["name"](around:{radius},{lat},{lon});`,
+  food:       `node["amenity"~"restaurant|cafe|bar|pub|fast_food|food_court|bakery"](around:{r},{lat},{lon});`,
+  attraction: `node["tourism"~"attraction|artwork|viewpoint|theme_park"](around:{r},{lat},{lon});`,
+  museum:     `node["tourism"="museum"](around:{r},{lat},{lon});`,
+  park:       `(node["leisure"~"park|garden|playground"](around:{r},{lat},{lon}); way["leisure"~"park|garden"](around:{r},{lat},{lon}););`,
+  landmark:   `(node["historic"](around:{r},{lat},{lon}); node["tourism"~"monument|memorial"](around:{r},{lat},{lon}););`,
+  nightlife:  `node["amenity"~"nightclub|bar|pub|casino"](around:{r},{lat},{lon});`,
+  shopping:   `(node["shop"](around:{r},{lat},{lon}); node["amenity"~"marketplace|shopping_centre"](around:{r},{lat},{lon}););`,
+  transport:  `(node["public_transport"~"station|stop_position"](around:{r},{lat},{lon}); node["amenity"~"bus_station|taxi"](around:{r},{lat},{lon}););`,
+  hotel:      `node["tourism"~"hotel|motel|hostel|guest_house"](around:{r},{lat},{lon});`,
+  event:      `node["amenity"~"events_venue|theatre|cinema"](around:{r},{lat},{lon});`,
+  hidden_gem: `(node["tourism"~"artwork|viewpoint"](around:{r},{lat},{lon}); node["historic"~"ruins|castle|fort"](around:{r},{lat},{lon}););`,
+  nature:     `(node["natural"](around:{r},{lat},{lon}); node["leisure"~"nature_reserve|park"](around:{r},{lat},{lon}););`,
+  sport:      `node["leisure"~"sports_centre|gym|stadium|pitch"](around:{r},{lat},{lon});`,
+  healthcare: `node["amenity"~"hospital|clinic|pharmacy|doctors"](around:{r},{lat},{lon});`,
+  other:      `node["name"](around:{r},{lat},{lon});`,
 };
 
-function buildQuery(
-  lat: number,
-  lon: number,
-  radius: number,
-  category: Category
-): string {
-  const categoryQuery = CATEGORY_QUERIES[category].replace(
-    /\{radius\}/g,
-    radius.toString()
-  ).replace(/\{lat\}/g, lat.toString()).replace(/\{lon\}/g, lon.toString());
-
-  return `[out:json][timeout:30];
-${categoryQuery}
-out body center 50;`;
+function buildQuery(lat: number, lon: number, radius: number, category: Category): string {
+  const q = CATEGORY_QUERIES[category]
+    .replace(/\{r\}/g, String(radius))
+    .replace(/\{lat\}/g, String(lat))
+    .replace(/\{lon\}/g, String(lon));
+  return `[out:json][timeout:25];\n${q}\nout body center 50;`;
 }
 
-function buildMultiCategoryQuery(
-  lat: number,
-  lon: number,
-  radius: number
-): string {
-  return `[out:json][timeout:30];
+function buildMultiCategoryQuery(lat: number, lon: number, radius: number): string {
+  // Lean query — 4 key categories only to reduce Overpass load and response time
+  return `[out:json][timeout:25];
 (
-  node["amenity"~"restaurant|cafe|bar|pub|fast_food"](around:${radius},${lat},${lon});
+  node["amenity"~"restaurant|cafe|bar|pub|fast_food|bakery"](around:${radius},${lat},${lon});
   node["tourism"~"attraction|museum|artwork|viewpoint"](around:${radius},${lat},${lon});
   node["leisure"~"park|garden"](around:${radius},${lat},${lon});
   node["historic"](around:${radius},${lat},${lon});
-  node["shop"~"mall|department_store|market"](around:${radius},${lat},${lon});
-  node["amenity"~"theatre|cinema|events_venue"](around:${radius},${lat},${lon});
 );
-out body center 80;`;
+out body center 60;`;
 }
+
+// ─── Overpass HTTP helper with endpoint fallback ───────────────────────────────
+
+interface OverpassNode {
+  type: "node" | "way" | "relation";
+  id: number;
+  lat: number;
+  lon: number;
+  center?: { lat: number; lon: number };
+  tags?: Record<string, string>;
+}
+
+interface OverpassResponse {
+  elements?: OverpassNode[];
+  remark?: string;
+}
+
+/**
+ * POST a query to Overpass, trying each endpoint in order.
+ * Throws only when ALL endpoints have failed.
+ */
+async function fetchFromOverpass(query: string, timeoutMs = 15000): Promise<OverpassResponse> {
+  let lastError: Error = new Error("No Overpass endpoints available");
+
+  for (const endpoint of OVERPASS_ENDPOINTS) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: `data=${encodeURIComponent(query)}`,
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+
+      // Rate-limited or this endpoint is overloaded — try next
+      if (response.status === 429 || response.status === 503 || response.status === 504) {
+        lastError = new Error(`Overpass ${response.status} at ${endpoint}`);
+        continue;
+      }
+
+      if (!response.ok) {
+        lastError = new Error(`Overpass HTTP ${response.status} at ${endpoint}`);
+        continue;
+      }
+
+      // Parse JSON safely — Overpass sometimes sends HTML error pages
+      let data: OverpassResponse;
+      try {
+        data = await response.json();
+      } catch {
+        lastError = new Error(`Overpass returned non-JSON from ${endpoint}`);
+        continue;
+      }
+
+      // Overpass may return 200 with a remark but no elements (overload mode)
+      if (!Array.isArray(data.elements)) {
+        const remark = data.remark ?? "no elements in response";
+        // If it says "overload", try next endpoint; otherwise treat as empty result
+        if (remark.toLowerCase().includes("overload") || remark.toLowerCase().includes("timeout")) {
+          lastError = new Error(`Overpass overloaded at ${endpoint}: ${remark}`);
+          continue;
+        }
+        // Not an overload — just empty results (valid)
+        return { elements: [] };
+      }
+
+      return data;
+    } catch (err) {
+      clearTimeout(timer);
+      const isAbort = (err as Error).name === "AbortError";
+      lastError = new Error(
+        isAbort
+          ? `Overpass timeout after ${timeoutMs}ms at ${endpoint}`
+          : `Overpass fetch error at ${endpoint}: ${(err as Error).message}`
+      );
+      // Continue to next endpoint
+    }
+  }
+
+  throw lastError;
+}
+
+// ─── OSM → Place conversion ───────────────────────────────────────────────────
 
 function tagToCategory(tags: Record<string, string>): Category {
   if (tags.amenity && ["restaurant", "cafe", "bar", "pub", "fast_food", "bakery", "food_court"].includes(tags.amenity)) return "food";
@@ -101,18 +182,13 @@ function nodeToPlace(node: OverpassNode, userCoords?: Coordinates): Place {
   const tags = node.tags || {};
   const category = tagToCategory(tags);
 
-  let distance: number | undefined;
-  if (userCoords) {
-    distance = haversineDistance(userCoords, { lat, lon });
-  }
+  const distance = userCoords ? haversineDistance(userCoords, { lat, lon }) : undefined;
 
   const address = [
     tags["addr:housenumber"],
     tags["addr:street"],
     tags["addr:city"],
-  ]
-    .filter(Boolean)
-    .join(", ") || tags["addr:full"] || undefined;
+  ].filter(Boolean).join(", ") || tags["addr:full"] || undefined;
 
   return {
     id: `osm-${node.type}-${node.id}`,
@@ -132,37 +208,12 @@ function nodeToPlace(node: OverpassNode, userCoords?: Coordinates): Place {
   };
 }
 
-function haversineDistance(a: Coordinates, b: Coordinates): number {
-  const R = 6371000; // meters
-  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
-  const dLon = ((b.lon - a.lon) * Math.PI) / 180;
-  const lat1 = (a.lat * Math.PI) / 180;
-  const lat2 = (b.lat * Math.PI) / 180;
-  const x =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
-}
+// ─── Public API ────────────────────────────────────────────────────────────────
 
-interface OverpassNode {
-  type: "node" | "way" | "relation";
-  id: number;
-  lat: number;
-  lon: number;
-  center?: { lat: number; lon: number };
-  tags?: Record<string, string>;
-}
-
-interface OverpassResponse {
-  elements: OverpassNode[];
-}
-
-export async function fetchNearbyPlaces(
-  query: NearbyQuery
-): Promise<Place[]> {
+export async function fetchNearbyPlaces(query: NearbyQuery): Promise<Place[]> {
   const { lat, lon, radius = 2000, category, limit = 50 } = query;
 
-  // Round coords to 3 dp for cache key (~100m granularity)
+  // Round coords to 3 dp for cache key (~100 m granularity)
   const cacheKey = `nearby:${lat.toFixed(3)},${lon.toFixed(3)},${radius},${category ?? "all"}`;
   const cached = getCached(cacheKey);
   if (cached) return cached.slice(0, limit);
@@ -171,39 +222,21 @@ export async function fetchNearbyPlaces(
     ? buildQuery(lat, lon, radius, category)
     : buildMultiCategoryQuery(lat, lon, radius);
 
-  let response: Response;
-  try {
-    response = await fetch(OVERPASS_API, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: `data=${encodeURIComponent(overpassQuery)}`,
-      signal: AbortSignal.timeout(25000),
-    });
-  } catch (err) {
-    // Network error or timeout — re-throw so the API route can handle it
-    throw new Error(`Overpass fetch failed: ${(err as Error).message}`);
-  }
-
-  if (response.status === 429 || response.status === 503) {
-    throw new Error(`Overpass rate limited or unavailable (${response.status})`);
-  }
-
-  if (!response.ok) {
-    throw new Error(`Overpass API error: ${response.status}`);
-  }
-
-  const data: OverpassResponse = await response.json();
+  const data = await fetchFromOverpass(overpassQuery, 15000);
   const userCoords: Coordinates = { lat, lon };
 
-  const places = data.elements
+  // elements is guaranteed to be an array by fetchFromOverpass
+  const elements = data.elements ?? [];
+
+  const places = elements
     .filter((el) => el.tags?.name)
     .map((el) => nodeToPlace(el, userCoords))
+    .filter((p) => p.coordinates.lat !== 0 || p.coordinates.lon !== 0) // drop malformed coords
     .sort((a, b) => (a.distance ?? 0) - (b.distance ?? 0))
     .slice(0, limit);
 
-  // Cache non-empty results for 5 minutes
   if (places.length > 0) {
-    setCached(cacheKey, places, 5 * 60 * 1000);
+    setCached(cacheKey, places, 5 * 60 * 1000); // 5-minute TTL
   }
 
   return places;
@@ -214,24 +247,19 @@ export async function fetchPlaceById(osmId: string): Promise<Place | null> {
   if (!match) return null;
 
   const [, type, id] = match;
+  const query = `[out:json][timeout:15];\n${type}(${id});\nout body center;`;
 
-  const query = `[out:json][timeout:15];
-${type}(${id});
-out body center;`;
+  let data: OverpassResponse;
+  try {
+    data = await fetchFromOverpass(query, 12000);
+  } catch {
+    return null;
+  }
 
-  const response = await fetch(OVERPASS_API, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: `data=${encodeURIComponent(query)}`,
-    signal: AbortSignal.timeout(20000),
-  });
+  const elements = data.elements ?? [];
+  if (!elements.length) return null;
 
-  if (!response.ok) return null;
-
-  const data: OverpassResponse = await response.json();
-  if (!data.elements.length) return null;
-
-  return nodeToPlace(data.elements[0]);
+  return nodeToPlace(elements[0]);
 }
 
 export async function fetchEvents(
@@ -243,34 +271,31 @@ export async function fetchEvents(
   const cached = getCached(cacheKey);
   if (cached) return cached;
 
-  const query = `[out:json][timeout:25];
+  const query = `[out:json][timeout:20];
 (
   node["amenity"~"events_venue|community_centre|theatre|cinema"](around:${radius},${lat},${lon});
   node["leisure"="stadium"](around:${radius},${lat},${lon});
-  node["tourism"="attraction"]["event"](around:${radius},${lat},${lon});
 );
 out body center 40;`;
 
-  const response = await fetch(OVERPASS_API, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: `data=${encodeURIComponent(query)}`,
-    signal: AbortSignal.timeout(28000),
-  });
+  let data: OverpassResponse;
+  try {
+    data = await fetchFromOverpass(query, 18000);
+  } catch {
+    return [];
+  }
 
-  if (!response.ok) throw new Error(`Overpass API error: ${response.status}`);
-
-  const data: OverpassResponse = await response.json();
   const userCoords: Coordinates = { lat, lon };
+  const elements = data.elements ?? [];
 
-  const places = data.elements
+  const places = elements
     .filter((el) => el.tags?.name)
     .map((el) => ({ ...nodeToPlace(el, userCoords), category: "event" as Category }))
     .sort((a, b) => (a.distance ?? 0) - (b.distance ?? 0))
     .slice(0, 30);
 
   if (places.length > 0) {
-    setCached(cacheKey, places, 10 * 60 * 1000); // 10 min for events
+    setCached(cacheKey, places, 10 * 60 * 1000);
   }
   return places;
 }

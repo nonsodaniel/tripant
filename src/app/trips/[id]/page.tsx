@@ -28,6 +28,7 @@ export default function TripDetailPage({ params }: PageProps) {
   const trip = getTrip(id);
   const [addingDay, setAddingDay] = useState(false);
   const [newDayDate, setNewDayDate] = useState("");
+  const [copied, setCopied] = useState(false);
 
   if (!trip) {
     return (
@@ -52,7 +53,10 @@ export default function TripDetailPage({ params }: PageProps) {
     if (navigator.share) {
       navigator.share({ title: trip!.name, url });
     } else {
-      navigator.clipboard.writeText(url).then(() => alert("Link copied!"));
+      navigator.clipboard.writeText(url).then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      });
     }
   }
 
@@ -85,9 +89,11 @@ export default function TripDetailPage({ params }: PageProps) {
         </div>
         <button
           onClick={handleShare}
-          className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-surface-secondary text-text-secondary"
+          className="flex items-center gap-1.5 px-2.5 h-8 rounded-lg hover:bg-surface-secondary text-text-secondary text-xs transition-colors duration-150"
+          title="Share trip"
         >
           <Share2 className="w-4 h-4" />
+          {copied && <span className="text-accent font-medium">Copied!</span>}
         </button>
       </div>
 

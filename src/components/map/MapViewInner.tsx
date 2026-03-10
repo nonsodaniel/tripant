@@ -74,6 +74,7 @@ export interface MapViewProps {
   showRadius?: boolean;
   radius?: number;
   onPlaceClick?: (place: Place) => void;
+  navigateOnClick?: boolean;
   className?: string;
 }
 
@@ -85,6 +86,7 @@ export function MapViewInner({
   showRadius = false,
   radius = 2000,
   onPlaceClick,
+  navigateOnClick = false,
   className = "w-full h-full",
 }: MapViewProps) {
   return (
@@ -131,26 +133,43 @@ export function MapViewInner({
           key={place.id}
           position={[place.coordinates.lat, place.coordinates.lon]}
           icon={createPlaceIcon(place.category)}
-          eventHandlers={{ click: () => onPlaceClick?.(place) }}
+          eventHandlers={{
+            click: () => {
+              onPlaceClick?.(place);
+              if (navigateOnClick) {
+                window.location.href = `/place/${encodeURIComponent(place.id)}`;
+              }
+            },
+          }}
         >
           <Popup closeButton={false}>
-            <div style={{ minWidth: 160 }}>
+            <div style={{ minWidth: 170 }}>
               <p style={{ margin: "0 0 2px", fontSize: 13, fontWeight: 600 }}>{place.name}</p>
               {place.address && (
-                <p style={{ margin: "0 0 4px", fontSize: 11, color: "#6B7280", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                <p style={{ margin: "0 0 6px", fontSize: 11, color: "#6B7280", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {place.address}
                 </p>
               )}
               {place.distance !== undefined && (
-                <p style={{ margin: "0 0 4px", fontSize: 11, color: "#2563EB", fontWeight: 500 }}>
+                <p style={{ margin: "0 0 6px", fontSize: 11, color: "#6B7280" }}>
                   {formatDistance(place.distance)} away
                 </p>
               )}
               <a
                 href={`/place/${encodeURIComponent(place.id)}`}
-                style={{ fontSize: 11, fontWeight: 600, color: "#2563EB", textDecoration: "none" }}
+                style={{
+                  display: "block",
+                  textAlign: "center",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: "#fff",
+                  background: "#2563EB",
+                  borderRadius: 8,
+                  padding: "6px 10px",
+                  textDecoration: "none",
+                }}
               >
-                View details →
+                View Details
               </a>
             </div>
           </Popup>

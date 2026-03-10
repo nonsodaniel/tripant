@@ -2,7 +2,7 @@
 
 import { useEffect, useState, Suspense, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { ArrowLeft, Search, RefreshCw } from "lucide-react";
+import { ArrowLeft, Search, RefreshCw, Navigation } from "lucide-react";
 import { PlaceCard } from "@/components/places/PlaceCard";
 import { CategoryFilter } from "@/components/places/CategoryFilter";
 import { PageSpinner } from "@/components/ui/Spinner";
@@ -10,6 +10,7 @@ import { PlaceCardSkeleton } from "@/components/ui/Skeleton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SearchBar } from "@/components/ui/SearchBar";
 import { useLocationStore } from "@/lib/store/useLocationStore";
+import { useGeolocation } from "@/lib/hooks/useGeolocation";
 import type { Category, Place } from "@/types";
 
 function SearchContent() {
@@ -19,6 +20,7 @@ function SearchContent() {
   const initialCategory = searchParams.get("category") as Category | null;
 
   const { coordinates } = useLocationStore();
+  const { locate } = useGeolocation();
   const [places, setPlaces] = useState<Place[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -97,9 +99,9 @@ function SearchContent() {
       />
 
       {loading && (
-        <div className="grid sm:grid-cols-2 gap-3">
+        <div className="space-y-2">
           {Array.from({ length: 6 }).map((_, i) => (
-            <PlaceCardSkeleton key={i} />
+            <PlaceCardSkeleton key={i} horizontal />
           ))}
         </div>
       )}
@@ -114,11 +116,22 @@ function SearchContent() {
       )}
 
       {!loading && !error && needsLocation && (
-        <EmptyState
-          icon={<Search className="w-6 h-6" />}
-          title="Location needed"
-          description="Enable location access to search by category."
-        />
+        <div className="flex flex-col items-center text-center py-12 px-4">
+          <div className="w-12 h-12 rounded-2xl bg-accent-light flex items-center justify-center mx-auto mb-3">
+            <Navigation className="w-6 h-6 text-accent" />
+          </div>
+          <p className="font-semibold text-text-primary">Location needed</p>
+          <p className="text-sm text-text-secondary mt-1 max-w-xs">
+            Enable location access to find nearby places in this category.
+          </p>
+          <button
+            onClick={locate}
+            className="mt-4 flex items-center gap-2 bg-accent text-white text-sm font-medium px-5 py-2.5 rounded-xl hover:bg-accent-dark active:scale-95 transition-all duration-150"
+          >
+            <Navigation className="w-4 h-4" />
+            Enable Location
+          </button>
+        </div>
       )}
 
       {!loading && !error && !needsLocation && places.length === 0 && (q || selectedCategory) && (
@@ -130,9 +143,9 @@ function SearchContent() {
       )}
 
       {!loading && !error && places.length > 0 && (
-        <div className="grid sm:grid-cols-2 gap-3 stagger">
+        <div className="space-y-2 stagger">
           {places.map((place) => (
-            <PlaceCard key={place.id} place={place} />
+            <PlaceCard key={place.id} place={place} horizontal />
           ))}
         </div>
       )}

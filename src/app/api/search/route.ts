@@ -4,14 +4,20 @@ import { fetchNearbyPlaces } from "@/lib/api/overpass";
 import type { Category } from "@/types";
 
 export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  const q = searchParams.get("q") || "";
-  const asPlaces = searchParams.get("asPlaces") === "true";
-  const lat = parseFloat(searchParams.get("lat") || "");
-  const lon = parseFloat(searchParams.get("lon") || "");
-  const category = searchParams.get("category") as Category | null;
+  let q: string, asPlaces: boolean, lat: number, lon: number, category: Category | null;
 
-  // If category filter + location, fetch from Overpass
+  try {
+    const { searchParams } = new URL(request.url);
+    q = searchParams.get("q") || "";
+    asPlaces = searchParams.get("asPlaces") === "true";
+    lat = parseFloat(searchParams.get("lat") ?? "");
+    lon = parseFloat(searchParams.get("lon") ?? "");
+    category = searchParams.get("category") as Category | null;
+  } catch {
+    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+  }
+
+  // Category + location → Overpass
   if (category && !isNaN(lat) && !isNaN(lon)) {
     try {
       const places = await fetchNearbyPlaces({ lat, lon, radius: 5000, category, limit: 50 });
@@ -19,11 +25,11 @@ export async function GET(request: NextRequest) {
         headers: { "Cache-Control": "public, s-maxage=300, stale-while-revalidate=600" },
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unknown error";
-      console.error("Search (category) error:", message);
+      const message = error instanceof Error ? error.message : String(error);
+      console.error("[/api/search] category+location error:", message);
       return NextResponse.json(
         { error: "Search temporarily unavailable. Please retry." },
-        { status: 503, headers: { "Retry-After": "5" } }
+        { status: 503, headers: { "Retry-After": "10", "Cache-Control": "no-store" } }
       );
     }
   }
@@ -48,16 +54,14 @@ export async function GET(request: NextRequest) {
     }
 
     return NextResponse.json(results, {
-      headers: {
-        "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300",
-      },
+      headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300" },
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    console.error("Search API error:", message);
-    return NextResponse.json(
-      { error: "Search temporarily unavailable. Please retry." },
-      { status: 503, headers: { "Retry-After": "5" } }
-    );
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("[/api/search] Nominatim error:", message);
+    // Return empty array instead of error for search — better UX than a failure message
+    return NextResponse.json([], {
+      headers: { "Cache-Control": "no-store" },
+    });
   }
 }

@@ -24,11 +24,98 @@ import { useSavedStore } from "@/lib/store/useSavedStore";
 import { useLocationStore } from "@/lib/store/useLocationStore";
 import type { Place } from "@/types";
 import { CATEGORY_LABELS } from "@/types";
-import { formatDistance } from "@/lib/utils/distance";
+import { formatDistance, haversineDistance } from "@/lib/utils/distance";
 import { MapView } from "@/components/map/MapView";
 
 interface PageProps {
   params: Promise<{ id: string }>;
+}
+
+// Curated OSM tag display config
+const TAG_CONFIG: Array<{
+  key: string;
+  label: string;
+  icon: string;
+  format?: (value: string) => string;
+  href?: (value: string) => string;
+}> = [
+  {
+    key: "cuisine",
+    label: "Cuisine",
+    icon: "🍽️",
+    format: (v) =>
+      v
+        .split(";")
+        .map((s) => s.trim().replace(/_/g, " "))
+        .join(", "),
+  },
+  {
+    key: "wheelchair",
+    label: "Wheelchair",
+    icon: "♿",
+    format: (v) =>
+      v === "yes"
+        ? "Fully accessible"
+        : v === "limited"
+        ? "Limited access"
+        : "Not accessible",
+  },
+  {
+    key: "internet_access",
+    label: "WiFi",
+    icon: "📶",
+    format: (v) =>
+      v === "wlan" || v === "yes" ? "Available" : v === "no" ? "Not available" : v,
+  },
+  {
+    key: "fee",
+    label: "Entry fee",
+    icon: "🎟️",
+    format: (v) => (v === "yes" ? "Paid entry" : "Free entry"),
+  },
+  {
+    key: "outdoor_seating",
+    label: "Outdoor seating",
+    icon: "🌤️",
+    format: (v) => (v === "yes" ? "Available" : "Not available"),
+  },
+  {
+    key: "takeaway",
+    label: "Takeaway",
+    icon: "🥡",
+    format: (v) => (v === "yes" ? "Available" : "No takeaway"),
+  },
+  { key: "capacity", label: "Capacity", icon: "👥" },
+  { key: "architect", label: "Architect", icon: "✏️" },
+  { key: "heritage", label: "Heritage", icon: "🏛️" },
+  {
+    key: "wikidata",
+    label: "Wikidata",
+    icon: "🔗",
+    format: (v) => v,
+    href: (v) => `https://www.wikidata.org/wiki/${v}`,
+  },
+  {
+    key: "wikipedia",
+    label: "Wikipedia",
+    icon: "📖",
+    format: (v) => v.replace(/^[a-z]+:/, ""),
+    href: (v) => {
+      const colonIdx = v.indexOf(":");
+      if (colonIdx === -1) return `https://en.wikipedia.org/wiki/${v}`;
+      const lang = v.slice(0, colonIdx);
+      const title = v.slice(colonIdx + 1);
+      return `https://${lang}.wikipedia.org/wiki/${title}`;
+    },
+  },
+];
+
+function safeHostname(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return url;
+  }
 }
 
 export default function PlaceDetailPage({ params }: PageProps) {
@@ -43,43 +130,94 @@ export default function PlaceDetailPage({ params }: PageProps) {
   const [showAddToTrip, setShowAddToTrip] = useState(false);
 
   const { coordinates } = useLocationStore();
-  const { isPlaceSaved, savePlace, unsavePlace, addToHistory } = useSavedStore();
+  const { isPlaceSaved, savePlace, unsavePlace, addToHistory, previewPlace } = useSavedStore();
   const saved = place ? isPlaceSaved(place.id) : false;
 
   useEffect(() => {
     async function load() {
-      setLoading(true);
-      setError(null);
+      // Show preview instantly if available for this place
+      const preview = previewPlace;
+      const hasPreview = preview?.id === placeId;
+      if (hasPreview && preview) {
+        // Apply user-side distance if we have it
+        let previewWithDist = preview;
+        if (coordinates && preview.coordinates && preview.distance === undefined) {
+          previewWithDist = {
+            ...preview,
+            distance: haversineDistance(coordinates, preview.coordinates),
+          };
+        }
+        setPlace(previewWithDist);
+        setLoading(false);
+      }
+
       try {
-        const res = await fetch(`/api/places/${encodeURIComponent(placeId)}`);
-        if (res.status === 503) throw new Error("Service temporarily unavailable. Please retry.");
-        if (res.status === 404) throw new Error("Place not found");
-        if (!res.ok) throw new Error("Failed to load place details");
-        const data: Place = await res.json();
-        setPlace(data);
+        // Start main fetch
+        const mainFetchPromise = fetch(`/api/places/${encodeURIComponent(placeId)}`);
+
+        // If preview coords available, fire nearby in parallel
+        const previewCoords = preview?.coordinates;
+        const nearbyFetchPromise = previewCoords
+          ? fetch(
+              `/api/places?lat=${previewCoords.lat}&lon=${previewCoords.lon}&radius=1000`
+            )
+          : null;
+
+        const [placeResult, nearbyResult] = await Promise.allSettled([
+          mainFetchPromise,
+          nearbyFetchPromise ?? Promise.resolve(null),
+        ]);
+
+        if (placeResult.status === "rejected") {
+          throw new Error("Failed to load place details");
+        }
+
+        const placeRes = placeResult.value!;
+        if (placeRes.status === 503) throw new Error("Service temporarily unavailable. Please retry.");
+        if (placeRes.status === 404) throw new Error("Place not found");
+        if (!placeRes.ok) throw new Error("Failed to load place details");
+
+        const data: Place = await placeRes.json();
+
+        // Compute distance from user location
+        let placeWithDist: Place = data;
+        if (coordinates && data.coordinates) {
+          placeWithDist = {
+            ...data,
+            distance: haversineDistance(coordinates, data.coordinates),
+          };
+        }
+        setPlace(placeWithDist);
         addToHistory({ type: "view", placeId: data.id, placeName: data.name });
 
-        if (data.coordinates) {
-          const nearby = await fetch(
+        // Handle nearby — use parallel result or fetch now with fresh coords
+        let nearbyRes: Response | null =
+          nearbyResult.status === "fulfilled" ? nearbyResult.value : null;
+        if (!nearbyRes && data.coordinates) {
+          nearbyRes = await fetch(
             `/api/places?lat=${data.coordinates.lat}&lon=${data.coordinates.lon}&radius=1000`
           );
-          if (nearby.ok) {
-            const nearbyData = await nearby.json();
-            if (Array.isArray(nearbyData)) {
-              setNearbyPlaces(nearbyData.filter((p: Place) => p.id !== data.id).slice(0, 6));
-            }
+        }
+        if (nearbyRes?.ok) {
+          const nearbyData = await nearbyRes.json();
+          if (Array.isArray(nearbyData)) {
+            setNearbyPlaces(
+              nearbyData.filter((p: Place) => p.id !== data.id).slice(0, 6)
+            );
           }
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load place");
+        if (!hasPreview) {
+          setError(err instanceof Error ? err.message : "Failed to load place");
+        }
       } finally {
         setLoading(false);
       }
     }
     load();
-  }, [placeId]);
+  }, [placeId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (loading) return <PlaceDetailSkeleton />;
+  if (loading && !place) return <PlaceDetailSkeleton />;
 
   if (error || !place) {
     const isRetryable = error?.includes("temporarily") || error?.includes("retry");
@@ -103,6 +241,10 @@ export default function PlaceDetailPage({ params }: PageProps) {
       navigator.clipboard.writeText(window.location.href);
     }
   }
+
+  const enrichedTags = place.tags
+    ? TAG_CONFIG.filter(({ key }) => !!place.tags![key])
+    : [];
 
   return (
     <>
@@ -190,7 +332,12 @@ export default function PlaceDetailPage({ params }: PageProps) {
             <InfoRow icon={<Phone className="w-4 h-4" />} label="Phone" value={place.phone} link={`tel:${place.phone}`} />
           )}
           {place.website && (
-            <InfoRow icon={<Globe className="w-4 h-4" />} label="Website" value={new URL(place.website).hostname} link={place.website} />
+            <InfoRow
+              icon={<Globe className="w-4 h-4" />}
+              label="Website"
+              value={safeHostname(place.website)}
+              link={place.website}
+            />
           )}
         </div>
 
@@ -215,6 +362,43 @@ export default function PlaceDetailPage({ params }: PageProps) {
             Add to Trip
           </Button>
         </div>
+
+        {/* Enriched OSM tags */}
+        {enrichedTags.length > 0 && (
+          <section>
+            <h2 className="text-base font-semibold text-text-primary mb-3">More info</h2>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {enrichedTags.map(({ key, label, icon, format, href }) => {
+                const rawValue = place.tags![key];
+                const displayValue = format ? format(rawValue) : rawValue;
+                const url = href ? href(rawValue) : undefined;
+                return (
+                  <div
+                    key={key}
+                    className="flex items-start gap-2 p-2.5 bg-surface-secondary rounded-xl"
+                  >
+                    <span className="text-base flex-shrink-0 mt-0.5">{icon}</span>
+                    <div className="min-w-0">
+                      <p className="text-xs text-text-tertiary leading-tight">{label}</p>
+                      {url ? (
+                        <a
+                          href={url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-accent mt-0.5 truncate block"
+                        >
+                          {displayValue}
+                        </a>
+                      ) : (
+                        <p className="text-xs text-text-primary mt-0.5 truncate">{displayValue}</p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
 
         {/* Map */}
         {place.coordinates && (
@@ -262,24 +446,6 @@ export default function PlaceDetailPage({ params }: PageProps) {
             </div>
           </section>
         )}
-
-        {/* OSM tags for transparency */}
-        {place.tags && Object.keys(place.tags).filter(k => k !== "name").length > 0 && (
-          <section>
-            <h2 className="text-base font-semibold text-text-primary mb-3">Details</h2>
-            <div className="flex flex-wrap gap-2">
-              {Object.entries(place.tags)
-                .filter(([k]) => !["name", "source"].includes(k))
-                .slice(0, 12)
-                .map(([k, v]) => (
-                  <span key={k} className="text-xs bg-surface-secondary border border-border rounded-lg px-2 py-1">
-                    <span className="text-text-tertiary">{k}: </span>
-                    <span className="text-text-primary">{v}</span>
-                  </span>
-                ))}
-            </div>
-          </section>
-        )}
       </div>
     </div>
     </>
@@ -315,14 +481,4 @@ function InfoRow({
     );
   }
   return content;
-}
-
-function getCategoryEmoji(category: string): string {
-  const map: Record<string, string> = {
-    food: "🍽️", attraction: "🎭", museum: "🏛️", park: "🌳",
-    landmark: "🗿", nightlife: "🌙", shopping: "🛍️", transport: "🚆",
-    hotel: "🏨", event: "🎪", hidden_gem: "💎", nature: "🌿",
-    sport: "⚽", healthcare: "🏥", other: "📍",
-  };
-  return map[category] || "📍";
 }

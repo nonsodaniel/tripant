@@ -8,6 +8,7 @@ interface SavedState {
   savedLists: SavedList[];
   history: ActivityHistory[];
   recentSearches: string[];
+  previewPlace: Place | null;
 
   savePlace: (place: Place, listId?: string) => void;
   unsavePlace: (placeId: string) => void;
@@ -22,6 +23,8 @@ interface SavedState {
   addToHistory: (entry: Omit<ActivityHistory, "id" | "timestamp">) => void;
   addRecentSearch: (query: string) => void;
   clearHistory: () => void;
+  setPreviewPlace: (place: Place) => void;
+  clearPreviewPlace: () => void;
 }
 
 export const useSavedStore = create<SavedState>()(
@@ -31,6 +34,7 @@ export const useSavedStore = create<SavedState>()(
       savedLists: [],
       history: [],
       recentSearches: [],
+      previewPlace: null,
 
       savePlace: (place, listId) => {
         const exists = get().savedPlaces.some((sp) => sp.placeId === place.id);
@@ -125,7 +129,18 @@ export const useSavedStore = create<SavedState>()(
       },
 
       clearHistory: () => set({ history: [], recentSearches: [] }),
+      setPreviewPlace: (place) => set({ previewPlace: place }),
+      clearPreviewPlace: () => set({ previewPlace: null }),
     }),
-    { name: "tripant:saved", skipHydration: true }
+    {
+      name: "tripant:saved",
+      skipHydration: true,
+      partialize: (state) => ({
+        savedPlaces: state.savedPlaces,
+        savedLists: state.savedLists,
+        history: state.history,
+        recentSearches: state.recentSearches,
+      }),
+    }
   )
 );

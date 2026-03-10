@@ -5,7 +5,7 @@
 // caching at the HTTP layer; the SW does NOT try to second-guess that.
 //
 // Bump VERSION whenever you deploy so old caches are purged immediately.
-const VERSION = "v6";
+const VERSION = "v7";
 const TILE_CACHE   = `tripant-tiles-${VERSION}`;
 const STATIC_CACHE = `tripant-static-${VERSION}`;
 

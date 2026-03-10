@@ -9,11 +9,14 @@ interface LocationState {
   address: string | null;
   permissionStatus: "prompt" | "granted" | "denied" | "unknown";
   isLocating: boolean;
+  locationPickerOpen: boolean;
   setCoordinates: (coords: Coordinates) => void;
   setCityInfo: (info: { city?: string; country?: string; address?: string }) => void;
   setPermissionStatus: (status: LocationState["permissionStatus"]) => void;
   setIsLocating: (loading: boolean) => void;
   reset: () => void;
+  openLocationPicker: () => void;
+  closeLocationPicker: () => void;
 }
 
 export const useLocationStore = create<LocationState>()(
@@ -25,6 +28,7 @@ export const useLocationStore = create<LocationState>()(
       address: null,
       permissionStatus: "unknown",
       isLocating: false,
+      locationPickerOpen: false,
 
       setCoordinates: (coords) => set({ coordinates: coords }),
       setCityInfo: (info) =>
@@ -44,6 +48,8 @@ export const useLocationStore = create<LocationState>()(
           permissionStatus: "unknown",
           isLocating: false,
         }),
+      openLocationPicker: () => set({ locationPickerOpen: true }),
+      closeLocationPicker: () => set({ locationPickerOpen: false }),
     }),
     {
       name: "tripant:location",

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { MapPin } from "lucide-react";
 import type { Category } from "@/types";
 
 const CATEGORIES: {
@@ -31,7 +32,15 @@ interface CategoryGridProps {
 export function CategoryGrid({ lat, lon }: CategoryGridProps) {
   return (
     <section>
-      <h2 className="text-lg font-semibold text-text-primary mb-4">Explore by Category</h2>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-semibold text-text-primary">Explore by Category</h2>
+        {!lat && !lon && (
+          <span className="flex items-center gap-1 text-xs text-text-tertiary">
+            <MapPin className="w-3 h-3" />
+            Enable location for nearby results
+          </span>
+        )}
+      </div>
       <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-2.5 stagger">
         {CATEGORIES.map(({ category, label, emoji, description }) => {
           const params = new URLSearchParams({ category });

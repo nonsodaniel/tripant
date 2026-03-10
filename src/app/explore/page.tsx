@@ -85,7 +85,7 @@ export default function ExplorePage() {
         )}
 
         {/* Nearby places */}
-        {coordinates && <NearbySection coordinates={coordinates} />}
+        {coordinates && <NearbySection coordinates={coordinates} hideWhenEmpty />}
       </div>
     </div>
   );

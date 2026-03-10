@@ -4,6 +4,7 @@ import { TopBar } from "./TopBar";
 import { BottomNav } from "./BottomNav";
 import { OfflineSplash } from "@/components/ui/OfflineSplash";
 import { StoreHydration } from "@/components/ui/StoreHydration";
+import { LocationPicker } from "@/components/ui/LocationPicker";
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -20,6 +21,7 @@ export function AppShell({ children }: AppShellProps) {
       </main>
       <BottomNav />
       <OfflineSplash />
+      <LocationPicker />
     </div>
   );
 }

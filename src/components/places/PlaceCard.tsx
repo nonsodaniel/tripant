@@ -18,7 +18,7 @@ interface PlaceCardProps {
 }
 
 export function PlaceCard({ place, horizontal = false, className }: PlaceCardProps) {
-  const { isPlaceSaved, savePlace, unsavePlace } = useSavedStore();
+  const { isPlaceSaved, savePlace, unsavePlace, setPreviewPlace } = useSavedStore();
   const saved = isPlaceSaved(place.id);
   const [justSaved, setJustSaved] = useState(false);
 
@@ -38,6 +38,7 @@ export function PlaceCard({ place, horizontal = false, className }: PlaceCardPro
     return (
       <Link
         href={`/place/${encodeURIComponent(place.id)}`}
+        onClick={() => setPreviewPlace(place)}
         className={clsx("block group active:scale-[0.98] transition-transform duration-150", className)}
       >
         <div className="flex items-start gap-3 p-3 bg-surface border border-border rounded-xl hover:shadow-card-hover hover:border-border-strong transition-all duration-150">
@@ -52,6 +53,9 @@ export function PlaceCard({ place, horizontal = false, className }: PlaceCardPro
               <div className="min-w-0">
                 <p className="font-medium text-sm text-text-primary truncate">{place.name}</p>
                 <p className="text-xs text-text-secondary mt-0.5">{CATEGORY_LABELS[place.category]}</p>
+                {place.address && (
+                  <p className="text-xs text-text-tertiary mt-0.5 truncate">{place.address}</p>
+                )}
               </div>
               <button
                 onClick={toggleSave}
@@ -93,6 +97,7 @@ export function PlaceCard({ place, horizontal = false, className }: PlaceCardPro
   return (
     <Link
       href={`/place/${encodeURIComponent(place.id)}`}
+      onClick={() => setPreviewPlace(place)}
       className={clsx(
         "block group active:scale-[0.97] transition-transform duration-150",
         className
@@ -137,6 +142,9 @@ export function PlaceCard({ place, horizontal = false, className }: PlaceCardPro
             {CATEGORY_LABELS[place.category]}
           </Badge>
           <p className="font-semibold text-sm text-text-primary line-clamp-1">{place.name}</p>
+          {place.address && (
+            <p className="text-xs text-text-tertiary mt-0.5 line-clamp-1">{place.address}</p>
+          )}
           <div className="flex items-center gap-2 mt-1.5">
             {place.distance !== undefined && (
               <span className="flex items-center gap-0.5 text-xs text-text-tertiary">

@@ -1,6 +1,6 @@
 "use client";
 
-import { MapPin } from "lucide-react";
+import { MapPin, ChevronDown } from "lucide-react";
 import { SearchBar } from "@/components/ui/SearchBar";
 import { useLocationStore } from "@/lib/store/useLocationStore";
 import { getWeatherIcon, getWeatherLabel } from "@/lib/api/weather";
@@ -19,7 +19,7 @@ interface HeroSearchProps {
 }
 
 export function HeroSearch({ weather }: HeroSearchProps) {
-  const { city, country, isLocating } = useLocationStore();
+  const { city, country, isLocating, openLocationPicker } = useLocationStore();
 
   return (
     <div className="bg-surface border-b border-border px-4 pt-6 pb-5 animate-fade-in">
@@ -32,16 +32,23 @@ export function HeroSearch({ weather }: HeroSearchProps) {
             <h1 className="text-3xl font-bold text-text-primary tracking-tight truncate">
               {isLocating ? "Locating…" : city ?? "Explore"}
             </h1>
-            <div className="flex items-center gap-1.5 mt-1.5">
+
+            {/* Tappable location row — opens picker */}
+            <button
+              onClick={openLocationPicker}
+              className="flex items-center gap-1.5 mt-1.5 group hover:opacity-70 transition-opacity duration-150 active:scale-95"
+              aria-label="Change location"
+            >
               <MapPin className="w-3.5 h-3.5 text-text-tertiary flex-shrink-0" />
               <p className="text-sm text-text-secondary truncate">
                 {isLocating
                   ? "Detecting your location…"
                   : city
                   ? `${city}${country ? `, ${country}` : ""}`
-                  : "Set your location to discover places nearby"}
+                  : "Tap to set your location"}
               </p>
-            </div>
+              <ChevronDown className="w-3.5 h-3.5 text-text-tertiary flex-shrink-0 group-hover:text-text-secondary transition-colors duration-150" />
+            </button>
           </div>
 
           {weather && (

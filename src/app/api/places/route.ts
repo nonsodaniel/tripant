@@ -3,25 +3,27 @@ import { fetchNearbyPlaces } from "@/lib/api/overpass";
 import type { Category } from "@/types";
 
 export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  const lat = parseFloat(searchParams.get("lat") || "");
-  const lon = parseFloat(searchParams.get("lon") || "");
-  const radius = parseInt(searchParams.get("radius") || "2000");
-  const category = searchParams.get("category") as Category | null;
-  const limit = parseInt(searchParams.get("limit") || "50");
+  let lat: number, lon: number, radius: number, limit: number;
+  let category: Category | undefined;
+
+  try {
+    const { searchParams } = new URL(request.url);
+    lat = parseFloat(searchParams.get("lat") ?? "");
+    lon = parseFloat(searchParams.get("lon") ?? "");
+    radius = Math.min(parseInt(searchParams.get("radius") ?? "2000", 10) || 2000, 10000);
+    limit = Math.min(parseInt(searchParams.get("limit") ?? "50", 10) || 50, 100);
+    const cat = searchParams.get("category");
+    category = cat ? (cat as Category) : undefined;
+  } catch {
+    return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
+  }
 
   if (isNaN(lat) || isNaN(lon)) {
     return NextResponse.json({ error: "lat and lon are required" }, { status: 400 });
   }
 
   try {
-    const places = await fetchNearbyPlaces({
-      lat,
-      lon,
-      radius: Math.min(radius, 10000),
-      category: category || undefined,
-      limit: Math.min(limit, 100),
-    });
+    const places = await fetchNearbyPlaces({ lat, lon, radius, category, limit });
 
     return NextResponse.json(places, {
       headers: {
@@ -29,15 +31,18 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    console.error("Places API error:", message);
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("[/api/places] Overpass error:", message);
 
-    // Return a 503 (service unavailable) instead of 500 so clients know to retry
+    // Always return 503 (not 500) so the client knows to retry
     return NextResponse.json(
-      { error: "Places temporarily unavailable. Please retry.", details: message },
+      { error: "Places temporarily unavailable. Please retry in a moment.", details: message },
       {
         status: 503,
-        headers: { "Retry-After": "5" },
+        headers: {
+          "Retry-After": "10",
+          "Cache-Control": "no-store",
+        },
       }
     );
   }

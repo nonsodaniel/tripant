@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Compass, Map, Briefcase, Bookmark, History, CalendarDays } from "lucide-react";
+import { Compass, Map, Briefcase, Bookmark, History, CalendarDays, MapPin, ChevronDown } from "lucide-react";
 import { SearchBar } from "@/components/ui/SearchBar";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
+import { useLocationStore } from "@/lib/store/useLocationStore";
 import { clsx } from "clsx";
 
 const NAV_ITEMS = [
@@ -18,6 +19,7 @@ const NAV_ITEMS = [
 
 export function TopBar() {
   const pathname = usePathname();
+  const { city, isLocating, openLocationPicker } = useLocationStore();
 
   return (
     <header className="hidden lg:flex sticky top-0 z-40 bg-surface border-b border-border h-14 items-center px-6 gap-6">
@@ -28,6 +30,20 @@ export function TopBar() {
         </div>
         <span className="font-semibold text-text-primary text-base">Tripant</span>
       </Link>
+
+      {/* Location button */}
+      <button
+        onClick={openLocationPicker}
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border hover:border-accent hover:bg-accent-light
+                   active:scale-95 transition-all duration-150 flex-shrink-0 group"
+        aria-label="Change location"
+      >
+        <MapPin className="w-3.5 h-3.5 text-text-tertiary group-hover:text-accent transition-colors duration-150" />
+        <span className="text-sm text-text-secondary group-hover:text-accent transition-colors duration-150 max-w-[120px] truncate">
+          {isLocating ? "Locating…" : city ?? "Set location"}
+        </span>
+        <ChevronDown className="w-3.5 h-3.5 text-text-tertiary group-hover:text-accent transition-colors duration-150" />
+      </button>
 
       {/* Nav links */}
       <nav className="flex items-center gap-1">
